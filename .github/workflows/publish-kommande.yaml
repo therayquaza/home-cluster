@@ -26,7 +26,7 @@ jobs:
       packages: write
     steps:
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ghcr.io/therayquaza/home-cluster/kommande
           subject-digest: ${{ needs.build.outputs.digest }}
