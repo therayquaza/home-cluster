@@ -22,7 +22,7 @@ spec:
         - name: ghcr
       containers:
         - name: kommande
-          image: ghcr.io/therayquaza/home-cluster/kommande:0.3.1@sha256:f8cb8594c2218e65a02b6489f9cb70afc049bcadf3750b6d7f57ca0d0c7dda14
+          image: ghcr.io/therayquaza/home-cluster/kommande:v0.3.2@sha256:b143622ab1784c11a4f68bf3c37017c6e673b17299a4d70f3e53fa069a2f7117
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
