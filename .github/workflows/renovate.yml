@@ -10,7 +10,7 @@ jobs:
     runs-on: [home-cluster]
     steps:
       - uses: actions/checkout@v7
-      - uses: renovatebot/github-action@v46.2.4
+      - uses: renovatebot/github-action@v46.3.0
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
