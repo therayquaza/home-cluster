@@ -99,7 +99,7 @@ spec:
               key: notificationscontroller.repo.server.plaintext
               name: argocd-cmd-params-cm
               optional: true
-        image: quay.io/argoproj/argocd:v3.5.2
+        image: quay.io/argoproj/argocd:v3.5.3
         imagePullPolicy: Always
         livenessProbe:
           tcpSocket:
