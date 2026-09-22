@@ -21,6 +21,6 @@ jobs:
           go-version-file: ${{ inputs.working-directory }}/go.mod
           cache: false
 
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: ${{ inputs.working-directory }}
