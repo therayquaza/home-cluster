@@ -12,9 +12,14 @@ on:
         required: true
         type: string
       dockerfile:
-        description: Path to Dockerfile relative to repo root
+        description: Path to Dockerfile relative to repo root (for linting)
         required: true
         type: string
+      build-dockerfile:
+        description: Path to Dockerfile relative to the build context
+        required: false
+        type: string
+        default: Dockerfile
       scan-target:
         description: Directory path for the filesystem Trivy scan
         required: true
@@ -31,6 +36,7 @@ jobs:
     with:
       context: ${{ inputs.context }}
       image-name: ${{ inputs.image-name }}
+      dockerfile: ${{ inputs.build-dockerfile }}
       push: false
       load: true
       platforms: ${{ inputs.platforms }}

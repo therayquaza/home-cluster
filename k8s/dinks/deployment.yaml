@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dinks-backend
+  namespace: dinks
+  labels: { app: dinks-backend }
+spec:
+  revisionHistoryLimit: 0
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: dinks-backend }
+  template:
+    metadata:
+      labels: { app: dinks-backend }
+    spec:
+      imagePullSecrets: [{ name: ghcr }]
+      containers:
+        - name: backend
+          image: ghcr.io/therayquaza/home-cluster/dinks-backend:PLACEHOLDER_DIGEST
+          imagePullPolicy: Always
+          ports: [{ containerPort: 8080 }]
+          envFrom:
+            - configMapRef: { name: dinks-config }
+            - secretRef: { name: dinks-secret }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile: { type: RuntimeDefault }
+          resources:
+            requests: { memory: 64Mi, cpu: 50m }
+            limits: { memory: 256Mi, cpu: 200m }
+          startupProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            failureThreshold: 30
+            periodSeconds: 3
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 30

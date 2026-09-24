@@ -1,0 +1,30 @@
+name: Publish - dinks-backend
+
+on:
+  push:
+    tags: ["dinks-backend/v*"]
+
+jobs:
+  build:
+    uses: ./.github/workflows/reusable-build.yaml
+    with:
+      context: apps/dinks/backend
+      image-name: ghcr.io/therayquaza/home-cluster/dinks-backend
+      push: true
+      tag-prefix: "dinks-backend/"
+    permissions:
+      contents: read
+      packages: write
+  attest:
+    needs: build
+    runs-on: [home-cluster]
+    permissions:
+      id-token: write
+      attestations: write
+      packages: write
+    steps:
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/therayquaza/home-cluster/dinks-backend
+          subject-digest: ${{ needs.build.outputs.digest }}
+          push-to-registry: true

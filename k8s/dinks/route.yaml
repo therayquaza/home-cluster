@@ -1,0 +1,17 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dinks-route
+  namespace: dinks
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: private-gateway
+      namespace: default
+      sectionName: dinks-https
+  hostnames: [dinks.internal.rayq.app]
+  rules:
+    - backendRefs:
+        - name: dinks-web
+          port: 8080

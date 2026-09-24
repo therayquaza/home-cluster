@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dinks-web
+  namespace: dinks
+spec:
+  revisionHistoryLimit: 0
+  replicas: 1
+  selector:
+    matchLabels: { app: dinks-web }
+  template:
+    metadata:
+      labels: { app: dinks-web }
+    spec:
+      imagePullSecrets: [{ name: ghcr }]
+      containers:
+        - name: web
+          image: ghcr.io/therayquaza/home-cluster/dinks-web:PLACEHOLDER_DIGEST
+          imagePullPolicy: Always
+          ports: [{ containerPort: 8080 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 101
+            seccompProfile: { type: RuntimeDefault }
+          resources:
+            requests: { memory: 32Mi, cpu: 25m }
+            limits: { memory: 128Mi, cpu: 100m }
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 8080 }
+            periodSeconds: 30

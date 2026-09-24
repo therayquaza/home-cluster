@@ -1,0 +1,1 @@
+{"expo":{"name":"Dinks","slug":"dinks","scheme":"dinks","version":"0.1.0","orientation":"portrait","ios":{"bundleIdentifier":"app.rayq.dinks"},"android":{"package":"app.rayq.dinks"},"plugins":["expo-secure-store"]}}

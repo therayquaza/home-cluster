@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: dinks
+spec:
+  serviceName: mongo
+  replicas: 1
+  selector:
+    matchLabels: { app: dinks-mongo }
+  template:
+    metadata:
+      labels: { app: dinks-mongo }
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mongo
+          image: mongo:8
+          # single-node replica set: required for the multi-document transaction used by DeleteMember
+          args: ["--replSet", "rs0", "--bind_ip_all"]
+          ports: [{ containerPort: 27017 }]
+          env:
+            - { name: MONGO_INITDB_ROOT_USERNAME, value: dinks }
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: dinks-secret, key: DB_PASSWORD } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            runAsNonRoot: true
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts: [{ name: mongo-data, mountPath: /data/db }]
+          resources:
+            requests: { memory: 128Mi, cpu: 100m }
+            limits: { memory: 512Mi, cpu: 500m }
+          startupProbe:
+            exec: { command: ["mongosh", "--quiet", "-u", "$(MONGO_INITDB_ROOT_USERNAME)", "-p", "$(MONGO_INITDB_ROOT_PASSWORD)", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"] }
+            failureThreshold: 30
+            periodSeconds: 3
+          livenessProbe:
+            exec: { command: ["mongosh", "--quiet", "-u", "$(MONGO_INITDB_ROOT_USERNAME)", "-p", "$(MONGO_INITDB_ROOT_PASSWORD)", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"] }
+            periodSeconds: 10
+          lifecycle:
+            postStart:
+              exec:
+                # single-node replica sets don't self-initiate; do it once, idempotently, after mongod is reachable
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    export cmd="mongosh --quiet -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD --authenticationDatabase admin"
+                    until $cmd --eval 'db.adminCommand("ping")' >/dev/null 2>&1; do sleep 1; done
+                    $cmd --eval 'try { rs.status() } catch (e) { rs.initiate() }'
+      volumes:
+        - name: mongo-data
+          persistentVolumeClaim: { claimName: dinks-mongo-data }

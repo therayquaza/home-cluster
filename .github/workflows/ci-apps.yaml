@@ -25,6 +25,31 @@ on:
       - .github/workflows/reusable-security-trivy.yaml
 
 jobs:
+  dinks-backend:
+    uses: ./.github/workflows/reusable-app-ci.yaml
+    with:
+      context: apps/dinks/backend
+      image-name: ghcr.io/therayquaza/home-cluster/dinks-backend
+      dockerfile: apps/dinks/backend/Dockerfile
+      scan-target: apps/dinks/backend
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+  dinks-web:
+    uses: ./.github/workflows/reusable-app-ci.yaml
+    with:
+      context: apps/dinks
+      image-name: ghcr.io/therayquaza/home-cluster/dinks-web
+      dockerfile: apps/dinks/web/Dockerfile
+      build-dockerfile: web/Dockerfile
+      scan-target: apps/dinks
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
   pix:
     uses: ./.github/workflows/reusable-app-ci.yaml
     with:

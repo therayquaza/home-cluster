@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dinks-web
+  namespace: dinks
+spec:
+  selector: { app: dinks-web }
+  ports:
+    - port: 8080
+      targetPort: 8080
