@@ -15,7 +15,7 @@ spec:
       imagePullSecrets: [{ name: ghcr }]
       containers:
         - name: web
-          image: ghcr.io/therayquaza/home-cluster/dinks-web:PLACEHOLDER_DIGEST
+          image: ghcr.io/therayquaza/home-cluster/dinks-web:v0.1.0
           imagePullPolicy: Always
           ports: [{ containerPort: 8080 }]
           securityContext:
