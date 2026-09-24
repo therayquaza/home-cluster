@@ -1,0 +1,11 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dinks-tls
+  namespace: dinks
+spec:
+  secretName: dinks-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames: [dinks.internal.rayq.app]

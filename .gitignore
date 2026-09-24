@@ -18,3 +18,8 @@ terraform/**/*.tfvars
 terraform/**/generated.tf
 terraform/**/*.tfplan
 # .terraform.lock.hcl is required to ensure consistent provider versions
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo

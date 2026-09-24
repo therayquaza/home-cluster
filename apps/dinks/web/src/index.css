@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #fdf1f6;
+  --color-brand-100: #fbdde9;
+  --color-brand-200: #f6c2d8;
+  --color-brand-300: #ec9bbe;
+  --color-brand-500: #cc4f82;
+  --color-brand-700: #9c3a63;
+  --color-brand: #cc4f82;
+  --color-brand-bg: #fff8fb;
+}
+
+body {
+  background-color: var(--color-brand-bg);
+}
+
+.rdp-day_period {
+  background-color: var(--color-brand-500) !important;
+  color: white !important;
+  border-radius: 9999px;
+}
+
+.rdp-day_predicted {
+  border: 2px dashed var(--color-brand-500) !important;
+  border-radius: 9999px;
+}
+
+.rdp-day_today {
+  box-shadow: inset 0 0 0 2px var(--color-brand-700);
+  border-radius: 9999px;
+  font-weight: 700;
+}
+
+.rdp-day_symptom {
+  position: relative;
+}
+
+.rdp-day_symptom::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--color-brand-700);
+}

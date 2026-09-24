@@ -11,6 +11,11 @@ on:
         description: Full image name without tag
         required: true
         type: string
+      dockerfile:
+        description: Dockerfile path relative to the build context
+        required: false
+        type: string
+        default: Dockerfile
       push:
         description: Push image to registry
         required: false
@@ -85,6 +90,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.context }}
+          file: ${{ inputs.context }}/${{ inputs.dockerfile }}
           push: ${{ inputs.push }}
           load: ${{ inputs.load }}
           platforms: ${{ inputs.platforms }}

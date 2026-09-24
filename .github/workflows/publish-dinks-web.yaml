@@ -1,0 +1,31 @@
+name: Publish - dinks-web
+
+on:
+  push:
+    tags: ["dinks-web/v*"]
+
+jobs:
+  build:
+    uses: ./.github/workflows/reusable-build.yaml
+    with:
+      context: apps/dinks
+      image-name: ghcr.io/therayquaza/home-cluster/dinks-web
+      dockerfile: web/Dockerfile
+      push: true
+      tag-prefix: "dinks-web/"
+    permissions:
+      contents: read
+      packages: write
+  attest:
+    needs: build
+    runs-on: [home-cluster]
+    permissions:
+      id-token: write
+      attestations: write
+      packages: write
+    steps:
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/therayquaza/home-cluster/dinks-web
+          subject-digest: ${{ needs.build.outputs.digest }}
+          push-to-registry: true
