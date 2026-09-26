@@ -17,11 +17,26 @@ spec:
         runAsGroup: 999
         fsGroup: 999
         seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: keyfile-perms
+          image: mongo:8
+          # k8s fsGroup adds group-read to secret-mounted files; mongod rejects
+          # keyFile perms wider than 0600. Copy into the writable tmp emptyDir and chmod there.
+          command: ["/bin/sh", "-c", "cp /etc/mongo-keyfile/keyfile /tmp/mongo-keyfile && chmod 600 /tmp/mongo-keyfile"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: mongo-keyfile, mountPath: /etc/mongo-keyfile, readOnly: true }
       containers:
         - name: mongo
           image: mongo:8
           # single-node replica set: required for the multi-document transaction used by DeleteMember
-          args: ["--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo-keyfile/keyfile"]
+          args: ["--replSet", "rs0", "--bind_ip_all", "--keyFile", "/tmp/mongo-keyfile"]
           ports: [{ containerPort: 27017 }]
           env:
             - { name: MONGO_INITDB_ROOT_USERNAME, value: dinks }
