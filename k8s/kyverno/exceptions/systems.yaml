@@ -33,13 +33,12 @@ spec:
     # kyverno clean-reports job has no resource limits in upstream chart
     - resources:
         namespaces: ["kyverno"]
-    # local-path-provisioner: upstream runs as root (requires host path access)
+    # local-path-provisioner: upstream runs as root (requires host path access).
+    # No label selector: dynamically-created helper pods (helper-pod-create-pvc-*,
+    # helper-pod-delete-pvc-*) don't carry the app.kubernetes.io/name label.
     - resources:
         kinds: ["Pod", "Deployment", "ReplicaSet", "StatefulSet"]
         namespaces: ["local-path-provisioner"]
-        selector:
-          matchLabels:
-            app.kubernetes.io/name: local-path-provisioner
     # trivy-operator: upstream chart runs as root to scan container images
     - resources:
         kinds: ["Pod", "Deployment", "ReplicaSet"]
