@@ -56,11 +56,12 @@ spec:
             requests: { memory: 128Mi, cpu: 100m }
             limits: { memory: 512Mi, cpu: 500m }
           startupProbe:
-            exec: { command: ["mongosh", "--quiet", "-u", "$(MONGO_INITDB_ROOT_USERNAME)", "-p", "$(MONGO_INITDB_ROOT_PASSWORD)", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"] }
+            # exec.command is NOT shell-expanded by kubelet ($(VAR) only works in container command/args) — use sh -c
+            exec: { command: ["/bin/sh", "-c", "mongosh --quiet -u \"$MONGO_INITDB_ROOT_USERNAME\" -p \"$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")'"] }
             failureThreshold: 30
             periodSeconds: 3
           livenessProbe:
-            exec: { command: ["mongosh", "--quiet", "-u", "$(MONGO_INITDB_ROOT_USERNAME)", "-p", "$(MONGO_INITDB_ROOT_PASSWORD)", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"] }
+            exec: { command: ["/bin/sh", "-c", "mongosh --quiet -u \"$MONGO_INITDB_ROOT_USERNAME\" -p \"$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")'"] }
             periodSeconds: 10
           lifecycle:
             postStart:

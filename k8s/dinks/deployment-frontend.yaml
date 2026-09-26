@@ -25,6 +25,10 @@ spec:
             runAsNonRoot: true
             runAsUser: 101
             seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: nginx-cache, mountPath: /var/cache/nginx }
+            - { name: nginx-run, mountPath: /var/run }
+            - { name: nginx-tmp, mountPath: /tmp }
           resources:
             requests: { memory: 32Mi, cpu: 25m }
             limits: { memory: 128Mi, cpu: 100m }
@@ -34,3 +38,7 @@ spec:
           livenessProbe:
             httpGet: { path: /, port: 8080 }
             periodSeconds: 30
+      volumes:
+        - { name: nginx-cache, emptyDir: {} }
+        - { name: nginx-run, emptyDir: {} }
+        - { name: nginx-tmp, emptyDir: {} }
