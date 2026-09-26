@@ -60,9 +60,11 @@ spec:
             exec: { command: ["/bin/sh", "-c", "mongosh --quiet -u \"$MONGO_INITDB_ROOT_USERNAME\" -p \"$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")'"] }
             failureThreshold: 30
             periodSeconds: 3
+            timeoutSeconds: 5
           livenessProbe:
             exec: { command: ["/bin/sh", "-c", "mongosh --quiet -u \"$MONGO_INITDB_ROOT_USERNAME\" -p \"$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")'"] }
             periodSeconds: 10
+            timeoutSeconds: 5
           lifecycle:
             postStart:
               exec:
