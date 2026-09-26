@@ -63,6 +63,15 @@ resource "keycloak_openid_client" "games" {
   valid_redirect_uris   = ["https://games.internal.rayq.app/api/auth/oidc/callback"]
 }
 
+resource "keycloak_openid_client" "dinks" {
+  realm_id              = data.keycloak_realm.home.id
+  client_id             = "dinks-web"
+  name                  = "Dinks"
+  access_type           = "CONFIDENTIAL"
+  standard_flow_enabled = true
+  valid_redirect_uris   = ["https://dinks.internal.rayq.app/auth/callback"]
+}
+
 # ==========================================
 # Groups
 # ==========================================

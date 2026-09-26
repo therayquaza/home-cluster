@@ -14,7 +14,7 @@ provider "cloudflare" {
   api_token = var.cloudflare_api_key
 }
 
-resource "cloudflare_record" "multi_record" {
+resource "cloudflare_dns_record" "multi_record" {
   for_each = var.dns_records
 
   zone_id = var.zone_id

@@ -66,6 +66,27 @@ variable "keycloak_games_client_secret" {
   default     = ""
 }
 
+variable "keycloak_dinks_client_secret" {
+  description = "OIDC client secret for Dinks (from terraform/keycloak output)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# Dinks variables
+
+variable "dinks_db_password" {
+  description = "MongoDB root password for Dinks"
+  type        = string
+  sensitive   = true
+}
+
+variable "dinks_jwt_secret" {
+  description = "JWT signing secret for Dinks backend"
+  type        = string
+  sensitive   = true
+}
+
 # GitHub Runner variables
 
 variable "github_runner_pat" {

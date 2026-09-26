@@ -55,6 +55,22 @@ resource "vault_kv_secret_v2" "keycloak" {
     vault-client-secret    = var.keycloak_vault_client_secret
     kommande-client-secret = var.keycloak_kommande_client_secret
     games-client-secret    = var.keycloak_games_client_secret
+    dinks-web-client-secret = var.keycloak_dinks_client_secret
+  })
+}
+
+# ==========================================
+# Dinks Secrets
+# ==========================================
+
+resource "vault_kv_secret_v2" "dinks" {
+  mount = vault_mount.kv.path
+  name  = "dinks"
+
+  data_json = jsonencode({
+    db-password = var.dinks_db_password
+    mongo-uri   = "mongodb://dinks:${var.dinks_db_password}@mongo.dinks.svc.cluster.local:27017/dinks?authSource=admin"
+    jwt-secret  = var.dinks_jwt_secret
   })
 }
 

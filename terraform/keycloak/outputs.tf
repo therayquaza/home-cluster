@@ -17,3 +17,8 @@ output "games_client_secret" {
   value     = keycloak_openid_client.games.client_secret
   sensitive = true
 }
+
+output "dinks_client_secret" {
+  value     = keycloak_openid_client.dinks.client_secret
+  sensitive = true
+}
