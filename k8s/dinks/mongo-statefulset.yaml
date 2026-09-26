@@ -30,9 +30,12 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: ["ALL"] }
+            readOnlyRootFilesystem: true
             runAsNonRoot: true
             seccompProfile: { type: RuntimeDefault }
-          volumeMounts: [{ name: mongo-data, mountPath: /data/db }]
+          volumeMounts:
+            - { name: mongo-data, mountPath: /data/db }
+            - { name: tmp, mountPath: /tmp }
           resources:
             requests: { memory: 128Mi, cpu: 100m }
             limits: { memory: 512Mi, cpu: 500m }
@@ -57,3 +60,5 @@ spec:
       volumes:
         - name: mongo-data
           persistentVolumeClaim: { claimName: dinks-mongo-data }
+        - name: tmp
+          emptyDir: {}
