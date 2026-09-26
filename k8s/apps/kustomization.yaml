@@ -3,6 +3,7 @@ resources:
   - apps.yaml
   - argocd.yaml
   - cilium.yaml
+  - dinks.yaml
   - kata.yaml
   - cert-manager.yaml
   - external-secrets.yaml
