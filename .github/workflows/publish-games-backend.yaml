@@ -2,8 +2,8 @@ name: Publish - games-backend
 
 on:
   push:
-    tags:
-      - "games-backend/v*"
+    tags: ["games-backend/v*"]
+  workflow_dispatch:
 
 jobs:
   build:

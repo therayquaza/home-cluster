@@ -2,8 +2,8 @@ name: Publish - kommande
 
 on:
   push:
-    tags:
-      - "kommande/v*"
+    tags: ["kommande/v*"]
+  workflow_dispatch:
 
 jobs:
   build:

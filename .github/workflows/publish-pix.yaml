@@ -2,8 +2,8 @@ name: Publish - pix
 
 on:
   push:
-    tags:
-      - "pix/v*"
+    tags: ["pix/v*"]
+  workflow_dispatch:
 
 jobs:
   build:
