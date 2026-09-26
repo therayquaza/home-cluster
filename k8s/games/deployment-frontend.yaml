@@ -20,7 +20,7 @@ spec:
         - name: ghcr
       containers:
         - name: frontend
-          image: ghcr.io/therayquaza/home-cluster/games-frontend:v0.3.0@sha256:4e25931b28f361c97598ef09be11cf3f91ea1825e66124331c5a8f4e463a504a
+          image: ghcr.io/therayquaza/home-cluster/games-frontend:v0.3.2@sha256:ffe5556c2e1f98f635e6a88fa90a36fbe1a9f073e6942c49e5e9b42e42c653c8
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
