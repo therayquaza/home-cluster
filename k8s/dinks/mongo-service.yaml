@@ -4,6 +4,7 @@ metadata:
   name: mongo
   namespace: dinks
 spec:
+  clusterIP: None
   selector: { app: dinks-mongo }
   ports:
     - port: 27017

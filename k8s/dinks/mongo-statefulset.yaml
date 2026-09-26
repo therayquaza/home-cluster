@@ -75,7 +75,7 @@ spec:
                   - |
                     export cmd="mongosh --quiet -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD --authenticationDatabase admin"
                     until $cmd --eval 'db.adminCommand("ping")' >/dev/null 2>&1; do sleep 1; done
-                    $cmd --eval 'try { rs.status() } catch (e) { rs.initiate() }'
+                    $cmd --eval 'try { rs.status() } catch (e) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo-0.mongo.dinks.svc.cluster.local:27017"}]}) }'
       volumes:
         - name: mongo-data
           persistentVolumeClaim: { claimName: dinks-mongo-data }
