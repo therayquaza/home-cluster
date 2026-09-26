@@ -87,6 +87,12 @@ variable "dinks_jwt_secret" {
   sensitive   = true
 }
 
+variable "dinks_mongo_keyfile" {
+  description = "MongoDB internal cluster-auth keyfile content (base64 blob, 6-1024 chars)"
+  type        = string
+  sensitive   = true
+}
+
 # GitHub Runner variables
 
 variable "github_runner_pat" {

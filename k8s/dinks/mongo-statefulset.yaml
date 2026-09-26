@@ -21,7 +21,7 @@ spec:
         - name: mongo
           image: mongo:8
           # single-node replica set: required for the multi-document transaction used by DeleteMember
-          args: ["--replSet", "rs0", "--bind_ip_all"]
+          args: ["--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo-keyfile/keyfile"]
           ports: [{ containerPort: 27017 }]
           env:
             - { name: MONGO_INITDB_ROOT_USERNAME, value: dinks }
@@ -36,6 +36,7 @@ spec:
           volumeMounts:
             - { name: mongo-data, mountPath: /data/db }
             - { name: tmp, mountPath: /tmp }
+            - { name: mongo-keyfile, mountPath: /etc/mongo-keyfile, readOnly: true }
           resources:
             requests: { memory: 128Mi, cpu: 100m }
             limits: { memory: 512Mi, cpu: 500m }
@@ -62,3 +63,5 @@ spec:
           persistentVolumeClaim: { claimName: dinks-mongo-data }
         - name: tmp
           emptyDir: {}
+        - name: mongo-keyfile
+          secret: { secretName: dinks-secret, items: [{ key: MONGO_KEYFILE, path: keyfile, mode: 0400 }] }

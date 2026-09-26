@@ -71,6 +71,7 @@ resource "vault_kv_secret_v2" "dinks" {
     db-password = var.dinks_db_password
     mongo-uri   = "mongodb://dinks:${var.dinks_db_password}@mongo.dinks.svc.cluster.local:27017/dinks?authSource=admin"
     jwt-secret  = var.dinks_jwt_secret
+    mongo-keyfile = var.dinks_mongo_keyfile
   })
 }
 
