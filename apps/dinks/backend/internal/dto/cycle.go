@@ -35,6 +35,7 @@ type SymptomInput struct {
 type Problem struct {
 	Error string `json:"error"`
 }
+
 // StatsQuery is the safe, allowlisted "custom query" a frontend dashboard sends —
 // see service.AllowedMetrics / service.AllowedGroupBy for what's accepted.
 type StatsQuery struct {
