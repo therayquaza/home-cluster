@@ -11,3 +11,7 @@ data:
   OIDC_CLIENT_ID: "dinks-web"
   OIDC_MOBILE_CLIENT_ID: "dinks-mobile"
   OIDC_REDIRECT_URL: "https://dinks.internal.rayq.app/auth/callback"
+  # Backend log verbosity: debug, info, warn, error.
+  LOG_LEVEL: "info"
+  # Structured JSON on stdout; set to "text" for human-readable local runs.
+  LOG_FORMAT: "json"

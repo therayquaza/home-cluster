@@ -32,6 +32,10 @@ spec:
           volumeMounts:
             - { name: tmp, mountPath: /tmp }
             - { name: mongo-keyfile, mountPath: /etc/mongo-keyfile, readOnly: true }
+          # trivial cp+chmod of a keyfile; sized well below the mongod container
+          resources:
+            requests: { memory: 16Mi, cpu: 10m }
+            limits: { memory: 64Mi, cpu: 100m }
       containers:
         - name: mongo
           image: mongo:8
