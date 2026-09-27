@@ -184,3 +184,19 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: policy-reporter
+
+    - name: dinks-https
+      port: 443
+      protocol: HTTPS
+      hostname: "dinks.internal.rayq.app"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: dinks-tls
+            kind: Secret
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: dinks
