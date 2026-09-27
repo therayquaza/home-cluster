@@ -12,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"kommande/internal/email"
+	"kommande/internal/logging"
+	"kommande/internal/middleware"
 	"kommande/internal/models"
 )
 
@@ -243,7 +245,18 @@ func (h *Handler) AdminDeleteArticle(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	_, _ = h.db.Collection("articles").DeleteOne(ctx, bson.M{"_id": id})
+	actor := middleware.GetUser(r.Context())
+	res, err := h.db.Collection("articles").DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		logging.Log.Error("article delete failed", "article_id", id.Hex(), "actor_id", middleware.UserID(actor), "err", err)
+		setFlash(w, "Erreur lors de la suppression.", "danger")
+		http.Redirect(w, r, "/admin/articles", http.StatusSeeOther)
+		return
+	}
+	if res.DeletedCount == 0 {
+		logging.Log.Warn("article delete matched nothing", "article_id", id.Hex(), "actor_id", middleware.UserID(actor))
+	}
+	logging.Log.Info("article deleted", "article_id", id.Hex(), "actor_id", middleware.UserID(actor))
 
 	setFlash(w, "Article supprimé.", "success")
 	http.Redirect(w, r, "/admin/articles", http.StatusSeeOther)

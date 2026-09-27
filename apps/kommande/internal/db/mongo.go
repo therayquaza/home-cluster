@@ -2,11 +2,12 @@ package db
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"kommande/internal/logging"
 )
 
 func Connect(uri string) (*mongo.Client, error) {
@@ -23,6 +24,6 @@ func Connect(uri string) (*mongo.Client, error) {
 		return nil, err
 	}
 
-	log.Println("Connected to MongoDB")
+	logging.Log.Info("connected to mongodb", "uri", logging.RedactURI(uri))
 	return client, nil
 }

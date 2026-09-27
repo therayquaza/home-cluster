@@ -11,3 +11,5 @@ data:
   OIDC_ISSUER: "https://keycloak.internal.rayq.app/realms/home"
   OIDC_CLIENT_ID: "kommande"
   OIDC_REDIRECT_URL: "https://kommande.internal.rayq.app/auth/callback"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"

@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"kommande/internal/config"
+	"kommande/internal/logging"
 	"kommande/internal/middleware"
 	"kommande/internal/models"
 
@@ -43,6 +43,9 @@ func New(db *mongo.Database, files embed.FS, cfg *config.Config) (*Handler, erro
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.OIDCClientID})
+	logging.Log.Info("oidc provider discovered", "issuer", cfg.OIDCIssuer,
+		"auth_endpoint", provider.Endpoint().AuthURL,
+		"token_endpoint", provider.Endpoint().TokenURL)
 
 	h := &Handler{
 		db:           db,
@@ -96,14 +99,17 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplPath, title
 		tmplPath,
 	)
 	if err != nil {
-		log.Printf("template parse error [%s]: %v", tmplPath, err)
+		logging.Log.Error("template parse error", "template", tmplPath, "err", err)
 		http.Error(w, "Template error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.ExecuteTemplate(w, "layout", pd); err != nil {
-		log.Printf("template exec error [%s]: %v", tmplPath, err)
+		// The status line is already sent at this point, so the response cannot
+		// be turned into a 500; log the template that failed and what it rendered.
+		logging.Log.Error("template exec error", "template", tmplPath, "title", title,
+			"user_id", middleware.UserID(user), "err", err)
 	}
 }
 
