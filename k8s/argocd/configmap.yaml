@@ -101,6 +101,17 @@ data:
       - BackgroundScanReport
       - ClusterBackgroundScanReport
       - UpdateRequest
+    ### High-churn Event objects excluded to reduce the number of watched events
+    - apiGroups:
+      - ''
+      kinds:
+      - Event
+      clusters:
+      - "*"
+
+  # reduce memory pressure on the application-controller (was OOMKilling on full resync)
+  timeout.reconciliation: "300s"
+  timeout.reconciliation.jitter: "30s"
 kind: ConfigMap
 metadata:
   labels:
@@ -108,17 +119,6 @@ metadata:
     app.kubernetes.io/part-of: argocd
   name: argocd-cm
   namespace: argocd
-data:
-  # reduce memory pressure on the application-controller (was OOMKilling on full resync)
-  timeout.reconciliation: "300s"
-  timeout.reconciliation.jitter: "30s"
-  resource.exclusions: |
-    - apiGroups: ["cilium.io"]
-      kinds: ["CiliumIdentity", "CiliumEndpoint"]
-      clusters: ["*"]
-    - apiGroups: [""]
-      kinds: ["Event"]
-      clusters: ["*"]
 ---
 apiVersion: v1
 kind: ConfigMap
