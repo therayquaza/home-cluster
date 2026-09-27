@@ -6,6 +6,6 @@ metadata:
 spec:
   secretName: dinks-tls
   issuerRef:
-    name: letsencrypt-prod
+    name: letsencrypt-dns01
     kind: ClusterIssuer
   dnsNames: [dinks.internal.rayq.app]
