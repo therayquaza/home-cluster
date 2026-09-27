@@ -6,63 +6,29 @@
     ":semanticCommits"
   ],
   "timezone": "Europe/Paris",
-  "schedule": ["before 9am on monday"],
   "labels": ["dependencies"],
-  "dependencyDashboardTitle": "Renovate Dependency Dashboard",
 
   "automerge": false,
+  "minimumReleaseAge": "1 day",
+  "rollbackPrs": true,
+  "ignorePaths": ["**/.worktrees/**"],
 
   "argocd": {
     "managerFilePatterns": [
-      "/(^|/)k8s/apps/.+\\.yaml$/"
-    ]
-  },
-
-  "dockerfile": {
-    "managerFilePatterns": [
-      "/(^|/)apps/.+/Dockerfile$/"
-    ]
-  },
-
-  "kubernetes": {
-    "managerFilePatterns": [
-      "/(^|/)k8s/.+\\.yaml$/"
-    ]
-  },
-
-  "docker-compose": {
-    "managerFilePatterns": [
-      "/(^|/)apps/.+/docker-compose\\.ya?ml$/"
-    ]
-  },
-
-  "terraform": {
-    "managerFilePatterns": [
-      "/(^|/)terraform/.+\\.tf$/"
+      "/(^|/)k8s/apps/.+\\.ya?ml$/"
     ]
   },
 
   "customManagers": [
     {
       "customType": "regex",
-      "description": "hashicorp/vault image pinned inside ArgoCD helm values string",
+      "description": "container images pinned in ArgoCD helm values strings",
       "managerFilePatterns": [
-        "/(^|/)k8s/apps/vault\\.yaml$/"
+        "/(^|/)k8s/apps/(vault|local-path-provisioner)\\.ya?ml$/"
       ],
       "matchStrings": [
-        "repository: (?<depName>[^\\n]+)\\n\\s+tag: \"(?<currentValue>[^\"]+)\""
-      ],
-      "datasourceTemplate": "docker"
-    },
-    {
-      "customType": "regex",
-      "description": "rancher/local-path-provisioner image pinned inside ArgoCD helm values string",
-      "managerFilePatterns": [
-        "/(^|/)k8s/apps/local-path-provisioner\\.yaml$/"
-      ],
-      "matchStrings": [
-        "repository: (?<depName>rancher/local-path-provisioner)\\n\\s+tag: (?<currentValue>[^\\n]+)",
-        "repository: (?<depName>busybox)\\n\\s+tag: \"(?<currentValue>[^\"]+)\""
+        "repository: (?<depName>[^\\n]+)\\n\\s+tag: \"(?<currentValue>[^\"]+)\"",
+        "repository: (?<depName>[^\\n]+)\\n\\s+tag: (?<currentValue>[^\\n\"]+)"
       ],
       "datasourceTemplate": "docker"
     }
@@ -70,13 +36,13 @@
 
   "packageRules": [
     {
-      "description": "Group all helm chart updates into one PR",
+      "description": "helm charts",
       "matchManagers": ["argocd"],
       "groupName": "helm charts",
       "labels": ["dependencies", "helm"]
     },
     {
-      "description": "Infra charts on slower cadence - monthly, require manual merge",
+      "description": "infra charts: monthly, manual merge",
       "matchPackageNames": [
         "cilium",
         "cert-manager",
@@ -86,59 +52,41 @@
         "kata-deploy"
       ],
       "groupName": "infra helm charts",
-      "labels": ["dependencies", "helm", "infra"],
-      "schedule": ["before 9am on the first day of the month"],
-      "automerge": false
+      "labels": ["dependencies", "helm", "infra"]
     },
     {
-      "description": "kommande Go deps",
+      "description": "go modules",
       "matchManagers": ["gomod"],
-      "matchFileNames": ["apps/kommande/**"],
-      "groupName": "kommande go deps",
-      "labels": ["dependencies", "go", "kommande"]
+      "groupName": "go modules",
+      "labels": ["dependencies", "go"]
     },
     {
-      "description": "games backend Go deps",
-      "matchManagers": ["gomod"],
-      "matchFileNames": ["apps/games/backend/**"],
-      "groupName": "games-backend go deps",
-      "labels": ["dependencies", "go", "games"]
+      "description": "npm/bun",
+      "matchManagers": ["npm", "bun"],
+      "groupName": "npm",
+      "labels": ["dependencies", "npm"]
     },
     {
-      "description": "games frontend npm deps",
-      "matchManagers": ["npm"],
-      "groupName": "games-frontend npm deps",
-      "labels": ["dependencies", "npm", "games"]
-    },
-    {
-      "description": "Docker base images grouped per app",
-      "matchManagers": ["dockerfile"],
-      "groupName": "docker base images",
-      "labels": ["dependencies", "docker"]
-    },
-    {
-      "description": "Auto-merge Go updates",
-      "matchManagers": ["gomod"],
-      "automerge": true,
-      "automergeType": "pr",
-      "labels": ["dependencies", "go", "automerge"]
-    },
-    {
-      "description": "Group all Terraform provider updates",
+      "description": "terraform providers",
       "matchManagers": ["terraform"],
       "groupName": "terraform providers",
       "labels": ["dependencies", "terraform"]
     },
     {
-      "description": "Pin digest for golang and node base images for reproducibility",
-      "matchPackageNames": ["golang", "node"],
-      "matchManagers": ["dockerfile"],
+      "description": "pin container image digests",
+      "matchManagers": ["dockerfile", "kubernetes", "docker-compose"],
       "pinDigests": true
     },
     {
-      "description": "nginx:alpine uses a floating tag - disable digest pinning to avoid noise",
-      "matchPackageNames": ["nginx"],
+      "description": "floating tags - digest pinning is pure noise here",
+      "matchPackageNames": ["nginx", "nginxinc/nginx-unprivileged"],
       "pinDigests": false
+    },
+    {
+      "description": "auto-merge go updates once CI is green",
+      "matchManagers": ["gomod"],
+      "automerge": true,
+      "automergeType": "pr"
     }
   ]
 }
