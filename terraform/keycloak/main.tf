@@ -72,6 +72,19 @@ resource "keycloak_openid_client" "dinks" {
   valid_redirect_uris   = ["https://dinks.internal.rayq.app/auth/callback"]
 }
 
+# Native app client: public + PKCE, so there is no secret to propagate to Vault.
+# The backend verifies mobile ID tokens against this audience (OIDC_MOBILE_CLIENT_ID).
+resource "keycloak_openid_client" "dinks_mobile" {
+  realm_id                     = data.keycloak_realm.home.id
+  client_id                    = "dinks-mobile"
+  name                         = "Dinks Mobile"
+  access_type                  = "PUBLIC"
+  standard_flow_enabled        = true
+  direct_access_grants_enabled = false
+  pkce_code_challenge_method   = "S256"
+  valid_redirect_uris = ["dinks://*"]
+}
+
 # ==========================================
 # Groups
 # ==========================================

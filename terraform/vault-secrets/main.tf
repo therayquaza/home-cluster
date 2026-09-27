@@ -49,14 +49,31 @@ resource "vault_kv_secret_v2" "keycloak" {
   name  = "keycloak"
 
   data_json = jsonencode({
-    admin-password         = var.keycloak_admin_password
-    postgresql-password    = var.keycloak_postgresql_password
-    argocd-client-secret   = var.keycloak_argocd_client_secret
-    vault-client-secret    = var.keycloak_vault_client_secret
-    kommande-client-secret = var.keycloak_kommande_client_secret
-    games-client-secret    = var.keycloak_games_client_secret
+    admin-password          = var.keycloak_admin_password
+    postgresql-password     = var.keycloak_postgresql_password
+    argocd-client-secret    = var.keycloak_argocd_client_secret
+    vault-client-secret     = var.keycloak_vault_client_secret
+    kommande-client-secret  = var.keycloak_kommande_client_secret
+    games-client-secret     = var.keycloak_games_client_secret
     dinks-web-client-secret = var.keycloak_dinks_client_secret
   })
+
+  # A missing client secret defaults to "" and is written to Vault verbatim, so
+  # External Secrets syncs an empty value and reports Ready anyway — the consumer
+  # only fails later, at the OIDC token exchange. Require all-or-nothing so a
+  # partial second apply fails here instead of silently breaking a login.
+  lifecycle {
+    precondition {
+      condition = length(compact([
+        var.keycloak_argocd_client_secret,
+        var.keycloak_vault_client_secret,
+        var.keycloak_kommande_client_secret,
+        var.keycloak_games_client_secret,
+        var.keycloak_dinks_client_secret,
+      ])) % 5 == 0
+      error_message = "Keycloak client secrets must be all set or all empty (bootstrap vs. post-realm apply). A partial set means one consumer will receive an empty secret and fail at the OIDC token exchange."
+    }
+  }
 }
 
 # ==========================================
@@ -68,9 +85,9 @@ resource "vault_kv_secret_v2" "dinks" {
   name  = "dinks"
 
   data_json = jsonencode({
-    db-password = var.dinks_db_password
-    mongo-uri   = "mongodb://dinks:${var.dinks_db_password}@mongo.dinks.svc.cluster.local:27017/dinks?authSource=admin"
-    jwt-secret  = var.dinks_jwt_secret
+    db-password   = var.dinks_db_password
+    mongo-uri     = "mongodb://dinks:${var.dinks_db_password}@mongo.dinks.svc.cluster.local:27017/dinks?authSource=admin"
+    jwt-secret    = var.dinks_jwt_secret
     mongo-keyfile = var.dinks_mongo_keyfile
   })
 }
