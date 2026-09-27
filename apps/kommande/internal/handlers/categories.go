@@ -8,6 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"kommande/internal/logging"
+	"kommande/internal/middleware"
 	"kommande/internal/models"
 )
 
@@ -137,12 +139,29 @@ func (h *Handler) AdminDeleteCategory(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	_, _ = h.db.Collection("categories").DeleteOne(ctx, bson.M{"_id": id})
-	// Remove category reference from all articles
-	_, _ = h.db.Collection("articles").UpdateMany(ctx,
+	actor := middleware.GetUser(r.Context())
+	// A deleted category must also be unreferenced from its articles. These used
+	// to discard their errors, so a partial delete reported success to the user.
+	res, err := h.db.Collection("categories").DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		logging.Log.Error("category delete failed", "category_id", id.Hex(), "actor_id", middleware.UserID(actor), "err", err)
+		setFlash(w, "Erreur lors de la suppression.", "danger")
+		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+		return
+	}
+	if res.DeletedCount == 0 {
+		logging.Log.Warn("category delete matched nothing", "category_id", id.Hex(), "actor_id", middleware.UserID(actor))
+	}
+	upd, err := h.db.Collection("articles").UpdateMany(ctx,
 		bson.M{"category_ids": id},
 		bson.M{"$pull": bson.M{"category_ids": id}},
 	)
+	if err != nil {
+		logging.Log.Error("category unlink failed", "category_id", id.Hex(), "err", err)
+	} else {
+		logging.Log.Info("category deleted", "category_id", id.Hex(), "actor_id", middleware.UserID(actor),
+			"articles_updated", upd.ModifiedCount)
+	}
 
 	setFlash(w, "Catégorie supprimée.", "success")
 	http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"log"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -16,6 +15,7 @@ import (
 	"kommande/internal/config"
 	dbpkg "kommande/internal/db"
 	"kommande/internal/handlers"
+	"kommande/internal/logging"
 	"kommande/internal/middleware"
 )
 
@@ -23,27 +23,29 @@ import (
 var files embed.FS
 
 func main() {
+	logging.Init()
 	cfg := config.Load()
+	logConfig(cfg)
 
 	client, err := dbpkg.Connect(cfg.MongoURI)
 	if err != nil {
-		log.Fatalf("MongoDB connection failed: %v", err)
+		logging.Fatal("mongodb connection failed", "uri", logging.RedactURI(cfg.MongoURI), "err", err)
 	}
 
 	database := client.Database(cfg.DBName)
 	ctx := context.Background()
 
-	_, _ = database.Collection("users").Indexes().CreateOne(ctx, mongo.IndexModel{
+	ensureIndex(ctx, database, "users", "users_email_unique", mongo.IndexModel{
 		Keys:    bson.D{{Key: "email", Value: 1}},
 		Options: options.Index().SetUnique(true),
 	})
-	_, _ = database.Collection("orders").Indexes().CreateOne(ctx, mongo.IndexModel{
+	ensureIndex(ctx, database, "orders", "orders_email_date", mongo.IndexModel{
 		Keys: bson.D{{Key: "email", Value: 1}, {Key: "date", Value: -1}},
 	})
 
 	h, err := handlers.New(database, files, cfg)
 	if err != nil {
-		log.Fatalf("Handler init failed: %v", err)
+		logging.Fatal("handler init failed", "err", err)
 	}
 
 	mux := http.NewServeMux()
@@ -86,7 +88,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      mux,
+		Handler:      logging.RecoverPanic(logging.RequestLog(logging.Headers(mux))),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -96,16 +98,46 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Printf("Kommande listening on :%s", cfg.Port)
+		logging.Log.Info("kommande listening", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			logging.Fatal("server stopped", "err", err)
 		}
 	}()
 
 	<-sigCtx.Done()
-	log.Println("Shutting down...")
+	logging.Log.Info("shutdown signal received, draining connections")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_ = srv.Shutdown(shutCtx)
-	_ = client.Disconnect(shutCtx)
+	if err := srv.Shutdown(shutCtx); err != nil {
+		logging.Log.Error("graceful shutdown failed", "err", err)
+	}
+	if err := client.Disconnect(shutCtx); err != nil {
+		logging.Log.Error("mongodb disconnect failed", "err", err)
+	}
+	logging.Log.Info("shutdown complete")
+}
+
+// ensureIndex creates an index and records the outcome. These calls used to
+// discard their errors, so a failed unique index on users.email was invisible.
+func ensureIndex(ctx context.Context, db *mongo.Database, collection, index string, model mongo.IndexModel) {
+	if _, err := db.Collection(collection).Indexes().CreateOne(ctx, model); err != nil {
+		logging.Log.Error("index creation failed", "collection", collection, "index", index, "err", err)
+		return
+	}
+	logging.Log.Debug("index ensured", "collection", collection, "index", index)
+}
+
+// logConfig records the effective configuration at boot. Secrets are reduced to
+// a presence marker and the Mongo URI is stripped of its password.
+func logConfig(cfg *config.Config) {
+	logging.Log.Info("config http", "port", cfg.Port, "base_url", cfg.BaseURL)
+	logging.Log.Info("config mongo", "uri", logging.RedactURI(cfg.MongoURI), "db", cfg.DBName)
+	logging.Log.Info("config oidc", "issuer", cfg.OIDCIssuer, "client_id", cfg.OIDCClientID,
+		"redirect_url", cfg.OIDCRedirectURL, "client_secret", logging.Set(cfg.OIDCClientSecret))
+	logging.Log.Info("config smtp", "host", cfg.SMTPHost, "port", cfg.SMTPPort,
+		"from", cfg.SMTPFrom, "user", cfg.SMTPUser, "password", logging.Set(cfg.SMTPPassword))
+	logging.Log.Info("config auth", "jwt_secret", logging.Set(cfg.JWTSecret), "admin_email", cfg.AdminEmail)
+	if cfg.JWTSecret == config.DefaultJWTSecret {
+		logging.Log.Warn("JWT_SECRET is still the built-in default; every session cookie is forgeable")
+	}
 }

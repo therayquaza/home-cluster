@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
+	"kommande/internal/logging"
 	"kommande/internal/models"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -27,6 +29,14 @@ func RequireAuth(jwtSecret string, next http.Handler) http.Handler {
 		user, err := extractUser(r, jwtSecret)
 		if err != nil {
 			clearAuthCookie(w)
+			// A visitor arriving without a cookie is the normal entry point to
+			// the login flow; a rejected token is not. Split the two so a busy
+			// login page does not look like an auth failure spike.
+			if errors.Is(err, http.ErrNoCookie) {
+				logging.Log.Debug("auth redirect to login", "method", r.Method, "path", r.URL.Path, "reason", "no_session")
+			} else {
+				logging.Log.Warn("auth token rejected", "method", r.Method, "path", r.URL.Path, "err", err)
+			}
 			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 			return
 		}
@@ -39,11 +49,37 @@ func RequireAdmin(jwtSecret string, next http.Handler) http.Handler {
 	return RequireAuth(jwtSecret, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := GetUser(r.Context())
 		if user == nil || user.Role != "admin" {
+			logging.Log.Warn("admin access denied", "method", r.Method, "path", r.URL.Path,
+				"user_id", UserID(user), "role", Role(user))
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)
 	}))
+}
+
+// UserID returns a user id suitable for logs, tolerating a nil user.
+func UserID(u *models.User) string {
+	if u == nil {
+		return "<none>"
+	}
+	return u.ID.Hex()
+}
+
+// Role returns a user role suitable for logs, tolerating a nil user.
+func Role(u *models.User) string {
+	if u == nil {
+		return "<none>"
+	}
+	return u.Role
+}
+
+// Username returns a username suitable for logs, tolerating a nil user.
+func Username(u *models.User) string {
+	if u == nil {
+		return "<none>"
+	}
+	return u.Username
 }
 
 func GetUser(ctx context.Context) *models.User {

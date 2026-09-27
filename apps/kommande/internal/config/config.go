@@ -2,6 +2,11 @@ package config
 
 import "os"
 
+// DefaultJWTSecret is the fallback signing key. It is intentionally obvious so
+// a deployment that forgets to set JWT_SECRET can be detected at boot instead
+// of silently issuing forgeable session cookies.
+const DefaultJWTSecret = "change-me-in-production"
+
 type Config struct {
 	MongoURI         string
 	DBName           string
@@ -24,7 +29,7 @@ func Load() *Config {
 	return &Config{
 		MongoURI:         getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		DBName:           getEnv("DB_NAME", "kommande"),
-		JWTSecret:        getEnv("JWT_SECRET", "change-me-in-production"),
+		JWTSecret:        getEnv("JWT_SECRET", DefaultJWTSecret),
 		Port:             getEnv("PORT", "8080"),
 		SMTPHost:         getEnv("SMTP_HOST", ""),
 		SMTPPort:         getEnv("SMTP_PORT", "587"),

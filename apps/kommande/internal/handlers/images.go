@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"kommande/internal/logging"
 )
 
 func (h *Handler) ServeImage(w http.ResponseWriter, r *http.Request) {
@@ -37,5 +39,9 @@ func (h *Handler) ServeImage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	_, _ = io.Copy(w, downloadStream)
+	// A short write means the client hung up mid-image, which is worth seeing
+	// because the response is already committed and cannot be retried.
+	if n, err := io.Copy(w, downloadStream); err != nil {
+		logging.Log.Warn("image stream interrupted", "image_id", fileID.Hex(), "bytes", n, "err", err)
+	}
 }

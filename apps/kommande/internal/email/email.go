@@ -2,14 +2,15 @@ package email
 
 import (
 	"fmt"
-	"log"
 	"net/smtp"
 
 	"kommande/internal/config"
+	"kommande/internal/logging"
 )
 
 func Send(cfg *config.Config, to, subject, body string) {
 	if cfg.SMTPHost == "" || to == "" {
+		logging.Log.Warn("email skipped", "reason", "smtp or recipient missing", "host_set", cfg.SMTPHost != "", "to_set", to != "")
 		return
 	}
 	go func() {
@@ -23,7 +24,9 @@ func Send(cfg *config.Config, to, subject, body string) {
 			auth = smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPHost)
 		}
 		if err := smtp.SendMail(addr, auth, cfg.SMTPFrom, []string{to}, msg); err != nil {
-			log.Printf("email error to %s: %v", to, err)
+			logging.Log.Error("email delivery failed", "to", to, "subject", subject, "host", cfg.SMTPHost, "err", err)
+			return
 		}
+		logging.Log.Info("email delivered", "to", to, "subject", subject)
 	}()
 }
