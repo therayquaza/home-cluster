@@ -13,6 +13,30 @@ export type Invite = { code: string; expires_at: string }
 export type Prediction = { predicted_period_start?: string; method: string; disclaimer: string }
 export type Stats = { period_count: number; checkin_count: number; average_cycle_days: number; symptom_counts: Record<string, number>; cycles_sampled: number }
 
+/**
+ * The file GET /api/export produces and POST /api/import accepts. The record
+ * arrays are the input shapes rather than the stored ones — ids are assigned by
+ * the server, so a file may carry them (an export does) but they are ignored.
+ * `format`/`version`/`source` are optional: an export omits them, tooling that
+ * produces import files writes them so a future revision can be recognised.
+ */
+export type DataFile = {
+  format?: string
+  version?: number
+  source?: string
+  exported_at?: string
+  periods: PeriodInput[]
+  symptoms: SymptomInput[]
+}
+export type ImportMode = 'merge' | 'replace'
+export type ImportResult = {
+  mode: ImportMode
+  periods_imported: number
+  periods_skipped: number
+  symptoms_imported: number
+  symptoms_skipped: number
+}
+
 export type StatsMetric =
   | 'period_count'
   | 'checkin_count'
@@ -38,7 +62,9 @@ export function api(fetcher: Fetcher) {
     createSymptom: (input: SymptomInput) => fetcher<void>('POST', '/api/symptoms', input),
     updateSymptom: (id: number, input: SymptomInput) => fetcher<void>('PATCH', `/api/symptoms/${id}`, input),
     deleteSymptom: (id: number) => fetcher<void>('DELETE', `/api/symptoms/${id}`),
-    exportData: () => fetcher<unknown>('GET', '/api/export'),
+    exportData: () => fetcher<DataFile>('GET', '/api/export'),
+    importData: (file: DataFile, mode?: ImportMode) =>
+      fetcher<ImportResult>('POST', `/api/import${mode ? `?mode=${mode}` : ''}`, file),
     deleteMe: () => fetcher<void>('DELETE', '/api/me'),
     register: (input: RegisterInput) => fetcher<void>('POST', '/auth/register', input),
     login: (input: LoginInput) => fetcher<void>('POST', '/auth/login', input),

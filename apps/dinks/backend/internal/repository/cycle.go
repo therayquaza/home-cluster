@@ -17,6 +17,22 @@ import (
 var ErrNotFound = errors.New("not found")
 var ErrConflict = errors.New("already exists")
 
+// Read caps for the dashboard and export queries. These are the number of
+// records a single request will return, not a retention policy — a member who
+// has logged daily for several years has far more than a hundred check-ins, and
+// truncating silently hides their own history from the calendar and the stats.
+// The sort in each query is newest-first, so the cap always keeps the recent
+// end of the history.
+const (
+	maxPeriodsRead  = 2000
+	maxSymptomsRead = 20000
+)
+
+// dateLayout is the calendar-day format every date in the API uses. Parsing
+// and formatting a day through this layout keeps it in the server's zone
+// rather than drifting with the process's location settings.
+const dateLayout = "2006-01-02"
+
 type Cycle struct {
 	client       *mongo.Client
 	db           *mongo.Database
@@ -133,7 +149,7 @@ func (r *Cycle) GetMember(ctx context.Context, subject string) (*model.Member, e
 
 func (r *Cycle) Periods(ctx context.Context, subject string) ([]model.Period, error) {
 	cur, err := r.periods.Find(ctx, bson.M{"subject": subject},
-		options.Find().SetSort(bson.D{{Key: "started_on", Value: -1}}).SetLimit(100))
+		options.Find().SetSort(bson.D{{Key: "started_on", Value: -1}}).SetLimit(maxPeriodsRead))
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +162,7 @@ func (r *Cycle) Periods(ctx context.Context, subject string) ([]model.Period, er
 
 func (r *Cycle) Symptoms(ctx context.Context, subject string) ([]model.Symptom, error) {
 	cur, err := r.symptoms.Find(ctx, bson.M{"subject": subject},
-		options.Find().SetSort(bson.D{{Key: "recorded_on", Value: -1}}).SetLimit(100))
+		options.Find().SetSort(bson.D{{Key: "recorded_on", Value: -1}}).SetLimit(maxSymptomsRead))
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +206,155 @@ func (r *Cycle) CreateSymptom(ctx context.Context, symptom *model.Symptom) error
 	symptom.ID = id
 	symptom.CreatedAt = time.Now().UTC()
 	_, err = r.symptoms.InsertOne(ctx, symptom)
+	return err
+}
+
+// insertPeriods writes a batch of periods, drawing every id from the counter in
+// a single round trip. A bulk import would otherwise cost one counter round
+// trip per record, which dominates the cost of a file with thousands of them.
+func (r *Cycle) insertPeriods(ctx context.Context, ps []model.Period) error {
+	if len(ps) == 0 {
+		return nil
+	}
+	first, err := r.reserveIDs(ctx, model.CollectionPeriods, len(ps))
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	docs := make([]any, len(ps))
+	for i := range ps {
+		ps[i].ID = first + int64(i)
+		ps[i].CreatedAt = now
+		docs[i] = &ps[i]
+	}
+	_, err = r.periods.InsertMany(ctx, docs)
+	return err
+}
+
+// insertSymptoms writes a batch of check-ins, with the same single-round-trip
+// id allocation as insertPeriods.
+func (r *Cycle) insertSymptoms(ctx context.Context, ss []model.Symptom) error {
+	if len(ss) == 0 {
+		return nil
+	}
+	first, err := r.reserveIDs(ctx, model.CollectionSymptoms, len(ss))
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	docs := make([]any, len(ss))
+	for i := range ss {
+		ss[i].ID = first + int64(i)
+		ss[i].CreatedAt = now
+		docs[i] = &ss[i]
+	}
+	_, err = r.symptoms.InsertMany(ctx, docs)
+	return err
+}
+
+// PeriodStarts returns the start date of every period the subject already has.
+// The import handler diffs against it so re-importing the same file is a no-op
+// instead of duplicating the whole history.
+func (r *Cycle) PeriodStarts(ctx context.Context, subject string) ([]string, error) {
+	cur, err := r.periods.Find(ctx, bson.M{"subject": subject},
+		options.Find().
+			SetProjection(bson.M{"started_on": 1}).
+			SetSort(bson.D{{Key: "started_on", Value: -1}}).
+			SetLimit(maxPeriodsRead))
+	if err != nil {
+		return nil, err
+	}
+	// Decoded into a typed field rather than a map: a projected date read
+	// through bson.M arrives as bson.DateTime, and a type assertion against
+	// time.Time there fails on every document and silently returns nothing.
+	var docs []struct {
+		StartedOn time.Time `bson:"started_on"`
+	}
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(docs))
+	for _, d := range docs {
+		out = append(out, d.StartedOn.Format(dateLayout))
+	}
+	return out, nil
+}
+
+// SymptomKeys returns one key per check-in the subject already has, in the form
+// SymptomKey builds. A day can hold several kinds, so a slice of days would
+// lose the distinction; a slice of keys does not.
+func (r *Cycle) SymptomKeys(ctx context.Context, subject string) ([]string, error) {
+	cur, err := r.symptoms.Find(ctx, bson.M{"subject": subject},
+		options.Find().
+			SetProjection(bson.M{"recorded_on": 1, "kind": 1}).
+			SetSort(bson.D{{Key: "recorded_on", Value: -1}}).
+			SetLimit(maxSymptomsRead))
+	if err != nil {
+		return nil, err
+	}
+	var docs []struct {
+		RecordedOn time.Time `bson:"recorded_on"`
+		Kind       string    `bson:"kind"`
+	}
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(docs))
+	for _, d := range docs {
+		out = append(out, SymptomKey(d.RecordedOn.Format(dateLayout), d.Kind))
+	}
+	return out, nil
+}
+
+// SymptomKey is the natural identity of a check-in: the day it applies to plus
+// the kind. A member never logs the same kind twice for one day through the
+// UI, so the pair is a safe duplicate test during an import.
+func SymptomKey(recordedOn, kind string) string {
+	return recordedOn + "\x00" + kind
+}
+
+// ReplaceRecords erases the subject's periods and check-ins and writes the
+// supplied ones, atomically. Requires a replica set, as DeleteMember does.
+func (r *Cycle) ReplaceRecords(ctx context.Context, subject string, ps []model.Period, ss []model.Symptom) error {
+	sess, err := r.client.StartSession()
+	if err != nil {
+		return err
+	}
+	defer sess.EndSession(ctx)
+	_, err = sess.WithTransaction(ctx, func(ctx context.Context) (any, error) {
+		if err := r.deleteRecords(ctx, subject); err != nil {
+			return nil, err
+		}
+		if err := r.insertPeriods(ctx, ps); err != nil {
+			return nil, err
+		}
+		return nil, r.insertSymptoms(ctx, ss)
+	})
+	return err
+}
+
+// AppendRecords writes the supplied periods and check-ins alongside whatever
+// the subject already has, atomically.
+func (r *Cycle) AppendRecords(ctx context.Context, ps []model.Period, ss []model.Symptom) error {
+	sess, err := r.client.StartSession()
+	if err != nil {
+		return err
+	}
+	defer sess.EndSession(ctx)
+	_, err = sess.WithTransaction(ctx, func(ctx context.Context) (any, error) {
+		if err := r.insertPeriods(ctx, ps); err != nil {
+			return nil, err
+		}
+		return nil, r.insertSymptoms(ctx, ss)
+	})
+	return err
+}
+
+func (r *Cycle) deleteRecords(ctx context.Context, subject string) error {
+	if _, err := r.periods.DeleteMany(ctx, bson.M{"subject": subject}); err != nil {
+		return err
+	}
+	_, err := r.symptoms.DeleteMany(ctx, bson.M{"subject": subject})
 	return err
 }
 
@@ -353,14 +518,21 @@ func randomDigits(n int) (string, error) {
 // nextID hands out a Postgres-serial-like auto-incrementing id via a counters collection,
 // since Mongo document ids have no built-in sequential integer type.
 func (r *Cycle) nextID(ctx context.Context, counterName string) (int64, error) {
+	return r.reserveIDs(ctx, counterName, 1)
+}
+
+// reserveIDs claims n consecutive ids and returns the lowest. Bulk inserts use
+// it so a file of thousands of records costs one counter round trip instead of
+// one per document.
+func (r *Cycle) reserveIDs(ctx context.Context, counterName string, n int) (int64, error) {
 	var counter model.Counter
 	err := r.counters.FindOneAndUpdate(ctx,
 		bson.M{"_id": counterName},
-		bson.M{"$inc": bson.M{"seq": int64(1)}},
+		bson.M{"$inc": bson.M{"seq": int64(n)}},
 		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
 	).Decode(&counter)
 	if err != nil {
 		return 0, err
 	}
-	return counter.Seq, nil
+	return counter.Seq - int64(n) + 1, nil
 }

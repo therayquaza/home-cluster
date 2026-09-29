@@ -7,6 +7,12 @@ export const SYMPTOM_EMOJI: Record<string, string> = {
   'Mood swings': '🎭',
   Acne: '🔴',
   Nausea: '🤢',
+  'Abdominal pain': '😖',
+  'Increased appetite': '🍽️',
+  Backache: '🦴',
+  'Vaginal itching': '🌡️',
+  Insomnia: '🌙',
+  Diarrhea: '💧',
 }
 
 export const MOOD_EMOJI: Record<string, string> = {
@@ -21,6 +27,7 @@ export const MOOD_EMOJI: Record<string, string> = {
   Confident: '😎',
   Stressed: '😩',
   Grateful: '🥰',
+  Confused: '🌫️',
 }
 
 export function symptomEmoji(kind: string) {

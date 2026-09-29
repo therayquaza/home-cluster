@@ -57,6 +57,7 @@ func TestRoutesRejectsUnauthenticated(t *testing.T) {
 		{"GET", "/api/dashboard"},
 		{"GET", "/api/prediction"},
 		{"GET", "/api/export"},
+		{"POST", "/api/import"},
 		{"GET", "/api/stats"},
 		{"POST", "/api/stats/query"},
 		{"POST", "/api/periods"},

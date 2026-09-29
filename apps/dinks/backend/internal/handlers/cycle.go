@@ -156,7 +156,7 @@ func (h *Handler) DeleteSymptom(w http.ResponseWriter, r *http.Request) {
 // symptomModel validates the input DTO and converts it to the persistence model.
 // Severity is bounded to the 1-5 scale the UI offers.
 func symptomModel(in dto.SymptomInput) (model.Symptom, error) {
-	day, err := time.Parse("2006-01-02", in.RecordedOn)
+	day, err := time.Parse(dateLayout, in.RecordedOn)
 	if err != nil || strings.TrimSpace(in.Kind) == "" || in.Severity < 1 || in.Severity > 5 {
 		return model.Symptom{}, errors.New("recorded_on, kind, and severity (1-5) are required")
 	}
