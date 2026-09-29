@@ -34,6 +34,11 @@ const (
 	fallbackName = "Member"
 )
 
+// dateLayout is the calendar-day format every date crosses the API as. Parsing
+// and formatting through it keeps a day in the server's own zone instead of
+// letting it drift with the process's location settings.
+const dateLayout = "2006-01-02"
+
 // Handler holds the dependencies every HTTP handler needs.
 type Handler struct {
 	repo         *repository.Cycle
@@ -110,10 +115,10 @@ func cycleStatus(ps []model.Period) (onPeriod bool, nextPeriod *string, reminder
 	}
 	domainPeriods := make([]domain.Period, 0, len(ps))
 	for _, p := range ps {
-		domainPeriods = append(domainPeriods, domain.Period{StartedOn: p.StartedOn.Format("2006-01-02")})
+		domainPeriods = append(domainPeriods, domain.Period{StartedOn: p.StartedOn.Format(dateLayout)})
 	}
 	if next := domain.EstimateNextPeriod(domainPeriods); next != nil && next.After(time.Now()) {
-		v := next.Format("2006-01-02")
+		v := next.Format(dateLayout)
 		nextPeriod = &v
 		if time.Until(*next) < 7*24*time.Hour {
 			reminder = "Your next period may be approaching. This is a non-medical estimate."
@@ -124,13 +129,13 @@ func cycleStatus(ps []model.Period) (onPeriod bool, nextPeriod *string, reminder
 
 // periodModel validates the input DTO and converts it to the persistence model.
 func periodModel(subject string, in dto.PeriodInput) (model.Period, error) {
-	start, err := time.Parse("2006-01-02", in.StartedOn)
+	start, err := time.Parse(dateLayout, in.StartedOn)
 	if err != nil {
 		return model.Period{}, errors.New("started_on must be YYYY-MM-DD")
 	}
 	var end *time.Time
 	if in.EndedOn != "" {
-		v, err := time.Parse("2006-01-02", in.EndedOn)
+		v, err := time.Parse(dateLayout, in.EndedOn)
 		if err != nil || v.Before(start) {
 			return model.Period{}, errors.New("ended_on must be on or after started_on")
 		}
@@ -143,14 +148,14 @@ func periodModel(subject string, in dto.PeriodInput) (model.Period, error) {
 }
 
 func periodDTO(p model.Period) dto.Period {
-	out := dto.Period{ID: p.ID, StartedOn: p.StartedOn.Format("2006-01-02"), Flow: p.Flow, Notes: p.Notes}
+	out := dto.Period{ID: p.ID, StartedOn: p.StartedOn.Format(dateLayout), Flow: p.Flow, Notes: p.Notes}
 	if p.EndedOn != nil {
-		v := p.EndedOn.Format("2006-01-02")
+		v := p.EndedOn.Format(dateLayout)
 		out.EndedOn = &v
 	}
 	return out
 }
 
 func symptomDTO(s model.Symptom) dto.Symptom {
-	return dto.Symptom{ID: s.ID, RecordedOn: s.RecordedOn.Format("2006-01-02"), Kind: s.Kind, Severity: s.Severity, Notes: s.Notes}
+	return dto.Symptom{ID: s.ID, RecordedOn: s.RecordedOn.Format(dateLayout), Kind: s.Kind, Severity: s.Severity, Notes: s.Notes}
 }

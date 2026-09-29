@@ -8,7 +8,7 @@ import { useMutationToast } from '../useToast'
 import { symptomEmoji, moodEmoji } from '../lib/emoji'
 import LogDay from '../components/LogDay'
 
-const moods = ['Calm', 'Happy', 'Sensitive', 'Irritable', 'Anxious', 'Sad', 'Energetic', 'Tired', 'Confident', 'Stressed', 'Grateful']
+const moods = ['Calm', 'Happy', 'Sensitive', 'Irritable', 'Anxious', 'Sad', 'Energetic', 'Tired', 'Confident', 'Stressed', 'Grateful', 'Confused']
 const symptomKinds = ['Cramps', 'Headache', 'Bloating', 'Fatigue', 'Tender breasts']
 
 export default function Today() {

@@ -12,8 +12,10 @@ import (
 	"dinks/internal/logging"
 )
 
-// maxBodyBytes caps request bodies. The largest payload is a handful of short
-// strings, so 64 KiB is generous and keeps a hostile client from filling memory.
+// maxBodyBytes caps request bodies. The largest ordinary payload is a handful
+// of short strings, so 64 KiB is generous and keeps a hostile client from
+// filling memory. Endpoints that legitimately carry bulk data (the import
+// route) raise the cap for themselves via DecodeLimit.
 const maxBodyBytes = 64 << 10
 
 // JSON writes v as the response body with the given status.
@@ -43,7 +45,13 @@ func Problem(r *http.Request, w http.ResponseWriter, status int, msg string, err
 // Decode reads a JSON request body into v, reporting a 400 and returning false
 // if the body is malformed or oversized.
 func Decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	return DecodeLimit(w, r, v, maxBodyBytes)
+}
+
+// DecodeLimit is Decode with a caller-chosen body cap, for the few endpoints
+// whose payload is legitimately large.
+func DecodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		Problem(r, w, http.StatusBadRequest, "invalid request body", err)
 		return false

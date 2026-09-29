@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { client } from '../api'
 import { useDashboard } from '../useDashboard'
 import { useMutationToast } from '../useToast'
+import ImportData from '../components/ImportData'
 
 export default function Settings() {
-  const { displayName } = useDashboard()
+  const { displayName, refresh } = useDashboard()
   const navigate = useNavigate()
   const run = useMutationToast()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function signOut() {
@@ -68,9 +70,14 @@ export default function Settings() {
       </section>
 
       <section className="rounded-3xl bg-white p-5 shadow-sm">
-        <button className="w-full rounded-xl bg-brand-50 py-2.5 font-semibold text-brand-700" onClick={exportData}>
-          Export my data
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button className="rounded-xl bg-brand-50 py-2.5 font-semibold text-brand-700" onClick={exportData}>
+            Export my data
+          </button>
+          <button className="rounded-xl bg-brand-50 py-2.5 font-semibold text-brand-700" onClick={() => setImporting(true)}>
+            Import data
+          </button>
+        </div>
         <button className="mt-3 w-full rounded-xl bg-slate-100 py-2.5 font-semibold text-slate-700" onClick={signOut}>
           Sign out
         </button>
@@ -98,6 +105,8 @@ export default function Settings() {
       </section>
 
       <p className="px-1 text-center text-xs text-slate-400">Estimates are not medical advice.</p>
+
+      {importing && <ImportData onImported={refresh} onClose={() => setImporting(false)} />}
     </main>
   )
 }

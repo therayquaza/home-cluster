@@ -97,6 +97,7 @@ func routes(h *handlers.Handler, auth *middleware.Auth, sessions *scs.SessionMan
 	mux.Handle("GET /api/dashboard", guard(http.HandlerFunc(h.Dashboard)))
 	mux.Handle("GET /api/prediction", guard(http.HandlerFunc(h.Prediction)))
 	mux.Handle("GET /api/export", guard(http.HandlerFunc(h.Export)))
+	mux.Handle("POST /api/import", guard(http.HandlerFunc(h.Import)))
 	mux.Handle("GET /api/stats", guard(http.HandlerFunc(h.Stats)))
 	mux.Handle("POST /api/stats/query", guard(http.HandlerFunc(h.StatsQuery)))
 	mux.Handle("POST /api/periods", guard(http.HandlerFunc(h.CreatePeriod)))
