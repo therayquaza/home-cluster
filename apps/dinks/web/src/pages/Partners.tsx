@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import type { Invite, Partner, PartnerStatus } from '@dinks/shared'
+import { Link, useNavigate } from 'react-router-dom'
+import type { Invite, Partner, PartnerStatus, ShareField } from '@dinks/shared'
 import { client } from '../api'
 import { useMutationToast } from '../useToast'
 
@@ -90,18 +90,25 @@ export default function Partners() {
         )}
 
         <h3 className="mb-2 mt-5 text-sm font-semibold text-slate-700">People who can see my status</h3>
+        <p className="mb-2 text-xs text-slate-400">
+          You choose exactly what each person sees. Sharing your status is on by default; flow, symptoms, notes, sex and libido are
+          off until you turn them on.
+        </p>
         {loading && <p className="text-sm text-slate-400">Loading…</p>}
         {!loading && partners.length === 0 && <p className="text-sm text-slate-400">No one yet.</p>}
         <ul className="flex flex-col gap-2">
           {partners.map((p) => (
-            <li key={p.subject} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
-              <div>
-                <p className="font-medium text-slate-800">{p.display_name}</p>
-                <p className="text-xs text-slate-400">Linked {new Date(p.linked_at).toLocaleDateString()}</p>
+            <li key={p.subject} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-slate-800">{p.display_name}</p>
+                  <p className="text-xs text-slate-400">Linked {new Date(p.linked_at).toLocaleDateString()}</p>
+                </div>
+                <button className="font-semibold text-red-600" disabled={busy} onClick={() => revoke(p.subject, p.display_name)}>
+                  Revoke
+                </button>
               </div>
-              <button className="font-semibold text-red-600" disabled={busy} onClick={() => revoke(p.subject, p.display_name)}>
-                Revoke
-              </button>
+              <ShareEditor partner={p} onSaved={loadAll} />
             </li>
           ))}
         </ul>
@@ -124,20 +131,94 @@ export default function Partners() {
         </div>
         {redeemError && <p className="mt-2 text-sm text-red-500">{redeemError}</p>}
 
-        <div className="mt-4 flex flex-col gap-3">
-          {statuses.length === 0 && !loading && <p className="text-sm text-slate-400">No one has shared their status with you yet.</p>}
-          {statuses.map((s) => (
-            <div key={s.subject} className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Read-only</p>
-              <p className="mt-1 font-semibold text-slate-800">{s.display_name}</p>
-              <p className="mt-1 text-sm text-slate-600">{s.on_period ? 'Currently on their period' : 'Not currently on their period'}</p>
-              {s.next_period && <p className="mt-1 text-xs text-slate-500">Next period estimated around {s.next_period}.</p>}
-              {s.reminder && <p className="mt-1 text-xs text-slate-500">{s.reminder}</p>}
-            </div>
-          ))}
-        </div>
-        {statuses.length > 0 && <p className="mt-3 text-center text-xs text-slate-400">Estimates are not medical advice.</p>}
+        {statuses.length > 0 && (
+          <>
+            <p className="mt-4 text-sm font-semibold text-slate-700">Open</p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {statuses.map((s) => (
+                <li key={s.subject}>
+                  <Link to={`/partner/${s.subject}`} className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+                    <span className="font-semibold text-slate-800">{s.display_name}</span>
+                    <span className="text-slate-300">›</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
     </main>
+  )
+}
+
+/**
+ * The shareable fields, in the order they are offered. The first three are the
+ * status scope a link starts with; everything after them is opt-in, and the
+ * most sensitive entries come last.
+ */
+const SHARE_FIELDS: { field: ShareField; label: string; hint?: string }[] = [
+  { field: 'on_period', label: 'On my period right now' },
+  { field: 'next_period', label: 'Estimated next start' },
+  { field: 'reminders', label: 'Approaching-period reminders' },
+  { field: 'flow', label: 'Flow for each day', hint: 'Shown only on days you are on your period' },
+  { field: 'symptoms', label: 'Symptoms I log' },
+  { field: 'notes', label: 'My notes' },
+  { field: 'libido', label: 'Libido', hint: 'Sensitive — off by default' },
+  { field: 'sex', label: 'Sex', hint: 'Sensitive — off by default' },
+]
+
+function ShareEditor({ partner, onSaved }: { partner: Partner; onSaved: () => Promise<void> }) {
+  const run = useMutationToast()
+  const [open, setOpen] = useState(false)
+  const [share, setShare] = useState<ShareField[]>(partner.share)
+  const [busy, setBusy] = useState(false)
+
+  function toggle(field: ShareField) {
+    setShare((prev) => (prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]))
+  }
+
+  async function save() {
+    setBusy(true)
+    try {
+      await run(() => client.updateShare(partner.subject, share), 'Sharing updated')
+      await onSaved()
+    } catch {
+      // toast already shown
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-2">
+      <button className="text-xs font-semibold text-brand-700" onClick={() => setOpen(!open)}>
+        {open ? 'Done choosing' : `What they see (${share.length})`}
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-2 border-t border-slate-200 pt-2">
+          {SHARE_FIELDS.map(({ field, label, hint }) => (
+            <label key={field} className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-brand-500"
+                checked={share.includes(field)}
+                onChange={() => toggle(field)}
+              />
+              <span>
+                <span className="block text-sm text-slate-700">{label}</span>
+                {hint && <span className="block text-xs text-slate-400">{hint}</span>}
+              </span>
+            </label>
+          ))}
+          <button
+            className="mt-1 self-start rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            disabled={busy}
+            onClick={save}
+          >
+            Save
+          </button>
+        </div>
+      )}
+    </div>
   )
 }

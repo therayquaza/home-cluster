@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -13,6 +14,17 @@ import (
 	"dinks/internal/model"
 	"dinks/internal/repository"
 )
+
+// preferencesOf reads a subject's settings, falling back to defaults. A missing
+// member row (a bearer-only member before its first upsert) must not fail the
+// read that needed it, so the error is deliberately swallowed.
+func (h *Handler) preferencesOf(ctx context.Context, subject string) model.Preferences {
+	m, err := h.repo.GetMember(ctx, subject)
+	if err != nil {
+		return model.Preferences{}
+	}
+	return m.Preferences
+}
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	sub := middleware.Subject(r.Context())
@@ -33,17 +45,18 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	for _, s := range ss {
 		out.Symptoms = append(out.Symptoms, symptomDTO(s))
 	}
-	_, out.NextPeriod, out.Reminder = cycleStatus(ps)
+	_, out.NextPeriod, out.Reminder = cycleStatus(ps, h.preferencesOf(r.Context(), sub))
 	httpx.JSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) Prediction(w http.ResponseWriter, r *http.Request) {
-	ps, err := h.repo.Periods(r.Context(), middleware.Subject(r.Context()))
+	sub := middleware.Subject(r.Context())
+	ps, err := h.repo.Periods(r.Context(), sub)
 	if err != nil {
 		httpx.Problem(r, w, http.StatusInternalServerError, "unable to load prediction", err)
 		return
 	}
-	_, next, _ := cycleStatus(ps)
+	_, next, _ := cycleStatus(ps, h.preferencesOf(r.Context(), sub))
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"predicted_period_start": next,
 		"method":                 "average of recent plausible cycle lengths",
@@ -89,6 +102,24 @@ func (h *Handler) UpdatePeriod(w http.ResponseWriter, r *http.Request) {
 		httpx.Problem(r, w, http.StatusNotFound, "period not found", err)
 	case err != nil:
 		httpx.Problem(r, w, http.StatusInternalServerError, "unable to update period", err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// DeletePeriod removes a period entirely. Separate from UpdatePeriod, which can
+// only end a period on a day — a mis-tapped start has to be removable.
+func (h *Handler) DeletePeriod(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpx.Problem(r, w, http.StatusBadRequest, "invalid period id", err)
+		return
+	}
+	switch err := h.repo.DeletePeriod(r.Context(), middleware.Subject(r.Context()), id); {
+	case errors.Is(err, repository.ErrNotFound):
+		httpx.Problem(r, w, http.StatusNotFound, "period not found", err)
+	case err != nil:
+		httpx.Problem(r, w, http.StatusInternalServerError, "unable to delete period", err)
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}

@@ -63,8 +63,8 @@ export default function Settings() {
           Partner mode
           <span className="text-slate-300">›</span>
         </button>
-        <button className="flex items-center justify-between rounded-2xl px-3 py-3 text-left font-semibold text-slate-700" onClick={() => navigate('/settings/insights')}>
-          Cycle insights
+        <button className="flex items-center justify-between rounded-2xl px-3 py-3 text-left font-semibold text-slate-700" onClick={() => navigate('/settings/preferences')}>
+          Preferences
           <span className="text-slate-300">›</span>
         </button>
       </section>

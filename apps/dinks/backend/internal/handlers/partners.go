@@ -4,11 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"dinks/internal/dto"
 	"dinks/internal/httpx"
 	"dinks/internal/middleware"
+	"dinks/internal/model"
 	"dinks/internal/repository"
 )
 
@@ -44,16 +46,26 @@ func (h *Handler) ListPartners(w http.ResponseWriter, r *http.Request) {
 		httpx.Problem(r, w, http.StatusInternalServerError, "unable to load partners", err)
 		return
 	}
+	subjects := make([]string, 0, len(links))
+	for _, l := range links {
+		subjects = append(subjects, l.PartnerSubject)
+	}
+	members, err := h.repo.MembersBySubject(r.Context(), subjects)
+	if err != nil {
+		httpx.Problem(r, w, http.StatusInternalServerError, "unable to load partners", err)
+		return
+	}
 	out := make([]dto.Partner, 0, len(links))
 	for _, l := range links {
-		member, err := h.repo.GetMember(r.Context(), l.PartnerSubject)
-		if err != nil {
+		member, ok := members[l.PartnerSubject]
+		if !ok {
 			continue
 		}
 		out = append(out, dto.Partner{
 			Subject:     l.PartnerSubject,
 			DisplayName: member.DisplayName,
 			LinkedAt:    l.CreatedAt.Format(time.RFC3339),
+			Share:       effectiveShare(l),
 		})
 	}
 	httpx.JSON(w, http.StatusOK, out)
@@ -78,24 +90,50 @@ func (h *Handler) PartnerStatuses(w http.ResponseWriter, r *http.Request) {
 		httpx.Problem(r, w, http.StatusInternalServerError, "unable to load shared status", err)
 		return
 	}
-	out := make([]dto.PartnerStatus, 0, len(links))
+	subjects := make([]string, 0, len(links))
 	for _, l := range links {
-		member, err := h.repo.GetMember(r.Context(), l.OwnerSubject)
-		if err != nil {
+		subjects = append(subjects, l.OwnerSubject)
+	}
+	members, err := h.repo.MembersBySubject(r.Context(), subjects)
+	if err != nil {
+		httpx.Problem(r, w, http.StatusInternalServerError, "unable to load shared status", err)
+		return
+	}
+	// Read each owner's periods concurrently rather than in sequence: with the
+	// per-owner read now a single cheap query, serialising them was the dominant
+	// cost of this endpoint once several people were shared with.
+	type result struct {
+		periods []model.Period
+		prefs   model.Preferences
+		ok      bool
+	}
+	results := make([]result, len(links))
+	var wg sync.WaitGroup
+	for i, l := range links {
+		if _, ok := members[l.OwnerSubject]; !ok {
 			continue
 		}
-		ps, err := h.repo.Periods(r.Context(), l.OwnerSubject)
-		if err != nil {
+		wg.Add(1)
+		go func(i int, owner string) {
+			defer wg.Done()
+			ps, err := h.repo.StatusPeriods(r.Context(), owner)
+			if err != nil {
+				return
+			}
+			results[i] = result{periods: ps, prefs: h.preferencesOf(r.Context(), owner), ok: true}
+		}(i, l.OwnerSubject)
+	}
+	wg.Wait()
+
+	out := make([]dto.PartnerStatus, 0, len(links))
+	for i, l := range links {
+		member, known := members[l.OwnerSubject]
+		if !known || !results[i].ok {
 			continue
 		}
-		onPeriod, nextPeriod, reminder := cycleStatus(ps)
-		out = append(out, dto.PartnerStatus{
-			Subject:     l.OwnerSubject,
-			DisplayName: member.DisplayName,
-			OnPeriod:    onPeriod,
-			NextPeriod:  nextPeriod,
-			Reminder:    reminder,
-		})
+		// The same projection the detailed view uses, so the summary list can
+		// never show a field the owner has since withdrawn.
+		out = append(out, h.projectStatus(l, member.DisplayName, results[i].periods, results[i].prefs))
 	}
 	httpx.JSON(w, http.StatusOK, out)
 }

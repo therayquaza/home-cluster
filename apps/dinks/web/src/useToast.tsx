@@ -6,6 +6,14 @@ type ToastContextValue = { toasts: Toast[]; push: (message: string, variant?: To
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
+/**
+ * At most this many toasts on screen at once. A single edit — unchecking six
+ * symptom toggles — fires six saves at once, and stacking all of them would bury
+ * the screen. Older toasts are dropped rather than queued, because a stale
+ * "Cramps logged" is worth less than the newest result.
+ */
+const MAX_VISIBLE = 2
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const idRef = useRef(0)
@@ -17,7 +25,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback(
     (message: string, variant: ToastVariant = 'success') => {
       const id = ++idRef.current
-      setToasts((prev) => [...prev, { id, message, variant }])
+      setToasts((prev) => [...prev, { id, message, variant }].slice(-MAX_VISIBLE))
       setTimeout(() => dismiss(id), 3500)
     },
     [dismiss],

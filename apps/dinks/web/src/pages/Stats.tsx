@@ -4,6 +4,7 @@ import { client } from '../api'
 import { useDashboard } from '../useDashboard'
 import { cycleGaps, periodLengths, symptomBreakdown } from '../lib/cycleStats'
 import { toISO } from '../lib/dates'
+import { PHASES, symptomsByPhase } from '@dinks/shared'
 
 type DateRangeKey = 'week' | 'month' | '3months' | 'all'
 const RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
@@ -276,6 +277,12 @@ export default function Stats() {
   const gaps = useMemo(() => cycleGaps(data?.periods ?? []), [data])
   const lengths = useMemo(() => periodLengths(data?.periods ?? []), [data])
   const breakdown = useMemo(() => symptomBreakdown(data?.symptoms ?? []), [data])
+  const avgCycle = useMemo(() => {
+    const g = cycleGaps(data?.periods ?? []).map((x) => x.gapDays)
+    if (g.length === 0) return 28
+    return Math.round(g.reduce((a, b) => a + b, 0) / g.length)
+  }, [data])
+  const phaseRows = useMemo(() => symptomsByPhase(data?.symptoms ?? [], data?.periods ?? [], avgCycle), [data, avgCycle])
 
   const cycleBars: Bar[] = gaps.slice(-8).map((g) => ({ label: g.start.slice(5), value: g.gapDays }))
   const lengthBars: Bar[] = lengths.slice(-8).map((p) => ({ label: p.start.slice(5), value: p.lengthDays }))
@@ -310,6 +317,29 @@ export default function Stats() {
           <p className="text-sm text-slate-400">No symptoms logged yet.</p>
         ) : (
           <HorizontalBars rows={breakdown.map((s) => ({ label: s.kind, count: s.count, pct: s.pct }))} />
+        )}
+      </section>
+
+      <section className="rounded-3xl bg-white p-5 shadow-sm">
+        <h2 className="mb-3 font-semibold text-slate-800">Symptoms by cycle phase</h2>
+        <p className="mb-3 text-xs text-slate-400">
+          How often each symptom was logged in each phase, as a share of the days you logged in that phase.
+        </p>
+        {phaseRows.size === 0 ? (
+          <p className="text-sm text-slate-400">Log a period and some symptoms to see this.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {PHASES.map(({ key, label }) => {
+              const rows = phaseRows.get(key) ?? []
+              if (rows.length === 0) return null
+              return (
+                <div key={key}>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-brand-700">{label}</p>
+                  <HorizontalBars rows={rows.map((r) => ({ label: r.label, count: r.count, pct: r.pct }))} />
+                </div>
+              )
+            })}
+          </div>
         )}
       </section>
 

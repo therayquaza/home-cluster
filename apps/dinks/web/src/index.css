@@ -15,21 +15,50 @@ body {
   background-color: var(--color-brand-bg);
 }
 
-.rdp-day_period {
-  background-color: var(--color-brand-500) !important;
-  color: white !important;
-  border-radius: 9999px;
-}
-
 .rdp-day_predicted {
   border: 2px dashed var(--color-brand-500) !important;
   border-radius: 9999px;
+}
+
+/* Per-day flow tinting. Flow varies within one period, so the grid grades each
+   day instead of painting the whole period one colour. These replace the old
+   single-colour `rdp-day_period`: a period day is now styled purely by the flow
+   recorded for that specific day, falling back to the period's summary.
+   Each level pairs a distinct lightness with the emoji and label in the day
+   detail, so the meaning never rests on hue alone. */
+.rdp-day_flow_heavy {
+  background-color: var(--color-brand-500) !important;
+  color: white !important;
+  font-weight: 700;
+}
+
+.rdp-day_flow_medium {
+  background-color: var(--color-brand-200) !important;
+  color: var(--color-brand-700) !important;
+  font-weight: 600;
+}
+
+.rdp-day_flow_light {
+  background-color: var(--color-brand-100) !important;
+  color: var(--color-brand-700) !important;
+}
+
+.rdp-day_flow_unknown {
+  background-color: var(--color-brand-50) !important;
+  color: var(--color-brand-700) !important;
+  border: 1px dashed var(--color-brand-200) !important;
 }
 
 .rdp-day_today {
   box-shadow: inset 0 0 0 2px var(--color-brand-700);
   border-radius: 9999px;
   font-weight: 700;
+}
+
+/* A day that is both today and a period day needs the ring to survive the flow
+   background, which is opaque. */
+.rdp-day_today.rdp-day_flow_heavy {
+  box-shadow: inset 0 0 0 2px var(--color-brand-700), inset 0 0 0 4px white;
 }
 
 .rdp-day_symptom {
