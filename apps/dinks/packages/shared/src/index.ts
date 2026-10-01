@@ -87,6 +87,10 @@ export type StatsQueryResponse = { results: StatsResult[] }
 
 export * from './phase.ts'
 export * from './symptoms.ts'
+export * from './dates.ts'
+export * from './periods.ts'
+export * from './cycleStats.ts'
+export * from './emoji.ts'
 
 export function api(fetcher: Fetcher) {
   return {

@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import type { Dashboard, StatsGroupBy, StatsMetric, StatsQueryResponse } from '@dinks/shared'
-import { mobileAPI } from '../api'
-import { cycleGaps, periodLengths, symptomBreakdown } from '../lib/cycleStats'
-import { toISO } from '../lib/dates'
+import { cycleGaps, periodLengths, symptomBreakdown, toISO } from '@dinks/shared'
+import type { ApiClient } from '../api'
 import { COLORS } from '../lib/theme'
 
 type DateRangeKey = 'week' | 'month' | '3months' | 'all'
@@ -131,7 +130,7 @@ function CustomStatsResults({ result }: { result: StatsQueryResponse }) {
   )
 }
 
-function CustomStatsQuery({ client }: { client: ReturnType<typeof mobileAPI> }) {
+function CustomStatsQuery({ client }: { client: ApiClient }) {
   const [metrics, setMetrics] = useState<StatsMetric[]>(['average_cycle_days'])
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('')
   const [range, setRange] = useState<DateRangeKey>('month')
@@ -214,7 +213,7 @@ function CustomStatsQuery({ client }: { client: ReturnType<typeof mobileAPI> }) 
   )
 }
 
-export default function Stats({ client, data }: { client: ReturnType<typeof mobileAPI>; data?: Dashboard }) {
+export default function Stats({ client, data }: { client: ApiClient; data?: Dashboard }) {
   const gaps = useMemo(() => cycleGaps(data?.periods ?? []), [data])
   const lengths = useMemo(() => periodLengths(data?.periods ?? []), [data])
   const breakdown = useMemo(() => symptomBreakdown(data?.symptoms ?? []), [data])

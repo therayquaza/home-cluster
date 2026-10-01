@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { Dashboard } from '@dinks/shared'
-import { mobileAPI } from '../api'
-import { periodDaySet, periodOnDay } from '../lib/periods'
-import { toISO, todayISO } from '../lib/dates'
+import { periodDaySet, periodOnDay, toISO, todayISO } from '@dinks/shared'
+import type { ApiClient } from '../api'
 import { COLORS } from '../lib/theme'
 import LogDay from '../components/LogDay'
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-type Props = { client: ReturnType<typeof mobileAPI>; data?: Dashboard; refresh: () => Promise<void>; selectedDate: string; onSelect: (iso: string) => void }
+type Props = { client: ApiClient; data?: Dashboard; refresh: () => Promise<void>; selectedDate: string; onSelect: (iso: string) => void }
 
 export default function CalendarScreen({ client, data, refresh, selectedDate, onSelect }: Props) {
   const todayIso = todayISO()

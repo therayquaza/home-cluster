@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text } from 'react-native'
-import { mobileAPI } from '../api'
+import type { ApiClient } from '../api'
 import { COLORS } from '../lib/theme'
 
-type Props = { client: ReturnType<typeof mobileAPI>; displayName: string; onSignedOut: () => void }
+type Props = { client: ApiClient; displayName: string; onSignedOut: () => void }
 
 export default function Settings({ client, displayName, onSignedOut }: Props) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)

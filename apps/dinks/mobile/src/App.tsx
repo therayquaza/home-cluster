@@ -1,39 +1,49 @@
 import { useEffect, useState } from 'react'
-import { Button, SafeAreaView, StyleSheet, Text, View, Pressable } from 'react-native'
-import type { Dashboard, Me } from '@dinks/shared'
-import { mobileAPI } from './api'
-import { signIn, signOut, token } from './auth'
-import { todayISO } from './lib/dates'
+import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native'
+import type { Dashboard } from '@dinks/shared'
+import { todayISO } from '@dinks/shared'
+import { client, setUnauthorizedHandler } from './api'
+import { signOut } from './auth'
 import { COLORS } from './lib/theme'
-import DayStrip from './components/DayStrip'
+import TopBar from './components/TopBar'
+import Login from './screens/Login'
 import Today from './screens/Today'
 import CalendarScreen from './screens/CalendarScreen'
 import Stats from './screens/Stats'
 import Settings from './screens/Settings'
 
-const client = mobileAPI(token)
 const TABS = ['Today', 'Calendar', 'Stats', 'Settings'] as const
 type Tab = (typeof TABS)[number]
+type AuthState = 'loading' | 'authed' | 'anon'
 
+// Mirrors web/src/AppShell.tsx: an auth gate around the same four tabs, the same
+// TopBar on Today/Calendar/Stats, and the same bottom navigation. The one mobile
+// difference is that navigation is tab state rather than a URL router.
 export default function App() {
-  const [signedIn, setSignedIn] = useState(false)
+  const [auth, setAuth] = useState<AuthState>('loading')
+  const [displayName, setDisplayName] = useState('')
   const [data, setData] = useState<Dashboard>()
-  const [me, setMe] = useState<Me>()
   const [tab, setTab] = useState<Tab>('Today')
   const [selectedDate, setSelectedDate] = useState(todayISO())
 
-  const refresh = () =>
-    client
-      .dashboard()
-      .then((d) => {
-        setData(d)
-        setSignedIn(true)
-      })
-      .catch(() => setSignedIn(false))
+  const refresh = async () => {
+    setData(await client.dashboard())
+  }
+
+  async function load() {
+    try {
+      const me = await client.me()
+      setDisplayName(me.display_name)
+      await refresh()
+      setAuth('authed')
+    } catch {
+      setAuth('anon')
+    }
+  }
 
   useEffect(() => {
-    void refresh()
-    client.me().then(setMe).catch(() => undefined)
+    setUnauthorizedHandler(() => setAuth('anon'))
+    void load()
   }, [])
 
   function select(iso: string) {
@@ -41,43 +51,47 @@ export default function App() {
     setTab('Today')
   }
 
-  if (!signedIn) {
+  async function handleSignOut() {
+    await signOut()
+    await client.logout().catch(() => undefined)
+    setDisplayName('')
+    setData(undefined)
+    setAuth('anon')
+  }
+
+  if (auth === 'loading') {
     return (
-      <SafeAreaView style={styles.landing}>
-        <Text style={styles.landingTitle}>Dinks</Text>
-        <Text>Your private cycle records.</Text>
-        <View style={{ marginTop: 16 }}>
-          <Button
-            title="Sign in"
-            onPress={() =>
-              signIn()
-                .then(() => refresh().then(() => client.me().then(setMe).catch(() => undefined)))
-                .catch((e) => alert(`Sign in failed: ${e.message}`))
-            }
-          />
-        </View>
+      <SafeAreaView style={styles.loading}>
+        <Text style={styles.loadingText}>Loading…</Text>
       </SafeAreaView>
     )
   }
 
+  if (auth === 'anon') {
+    return <Login onSignedIn={load} />
+  }
+
   return (
     <SafeAreaView style={styles.app}>
-      {(tab === 'Today' || tab === 'Calendar' || tab === 'Stats') && <DayStrip data={data} selectedDate={selectedDate} onSelect={setSelectedDate} />}
-      <View style={{ flex: 1 }}>
+      {tab !== 'Settings' && (
+        <TopBar
+          data={data}
+          displayName={displayName}
+          selectedDate={selectedDate}
+          onSelect={select}
+          onOpenSettings={() => setTab('Settings')}
+          onOpenCalendar={() => setTab('Calendar')}
+        />
+      )}
+      <View style={styles.content}>
         {tab === 'Today' && <Today client={client} data={data} refresh={refresh} selectedDate={selectedDate} />}
         {tab === 'Calendar' && <CalendarScreen client={client} data={data} refresh={refresh} selectedDate={selectedDate} onSelect={select} />}
         {tab === 'Stats' && <Stats client={client} data={data} />}
-        {tab === 'Settings' && (
-          <Settings
-            client={client}
-            displayName={me?.display_name ?? ''}
-            onSignedOut={() => signOut().then(() => setSignedIn(false))}
-          />
-        )}
+        {tab === 'Settings' && <Settings client={client} displayName={displayName} onSignedOut={handleSignOut} />}
       </View>
       <View style={styles.tabBar}>
         {TABS.map((t) => (
-          <Pressable key={t} style={styles.tabItem} onPress={() => setTab(t)}>
+          <Pressable key={t} style={styles.tabItem} onPress={() => setTab(t)} accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
             <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>{t}</Text>
           </Pressable>
         ))}
@@ -87,11 +101,12 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  landing: { flex: 1, padding: 20, justifyContent: 'center', backgroundColor: COLORS.bg },
-  landingTitle: { fontSize: 30, fontWeight: '700', marginBottom: 8, color: COLORS.slate800 },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bg },
+  loadingText: { color: COLORS.brand500, fontWeight: '600' },
   app: { flex: 1, backgroundColor: COLORS.bg },
+  content: { flex: 1 },
   tabBar: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.brand100, backgroundColor: COLORS.white },
   tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tabLabel: { fontSize: 12, fontWeight: '600', color: COLORS.slate400 },
+  tabLabel: { fontSize: 12, fontWeight: '500', color: COLORS.slate400 },
   tabLabelActive: { color: COLORS.brand500 },
 })

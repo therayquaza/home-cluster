@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import type { Dashboard, Prediction } from '@dinks/shared'
-import { mobileAPI } from '../api'
-import { periodOnDay } from '../lib/periods'
-import { todayISO } from '../lib/dates'
-import { symptomEmoji, moodEmoji } from '../lib/emoji'
+import type { Dashboard, Prediction, Symptom } from '@dinks/shared'
+import { periodOnDay, todayISO, symptomEmoji, moodEmoji, MOODS, parseDayNote, formatDayNote } from '@dinks/shared'
+import type { ApiClient } from '../api'
 import { COLORS } from '../lib/theme'
 import LogDay from '../components/LogDay'
 
-const moods = ['Calm', 'Happy', 'Sensitive', 'Irritable', 'Anxious', 'Sad', 'Energetic', 'Tired', 'Confident', 'Stressed', 'Grateful', 'Confused']
 const symptomKinds = ['Cramps', 'Headache', 'Bloating', 'Fatigue', 'Tender breasts']
 
-type Props = { client: ReturnType<typeof mobileAPI>; data?: Dashboard; refresh: () => Promise<void>; selectedDate: string }
+type Props = { client: ApiClient; data?: Dashboard; refresh: () => Promise<void>; selectedDate: string }
 
 export default function Today({ client, data, refresh, selectedDate }: Props) {
   const day = selectedDate
@@ -19,7 +16,7 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
   const isToday = day === todayIso
   const isFuture = day > todayIso
   const [flow, setFlow] = useState('medium')
-  const [moodSelection, setMoodSelection] = useState<string[]>(['Calm'])
+  const [moodSelection, setMoodSelection] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
   const [prediction, setPrediction] = useState<Prediction>()
@@ -33,6 +30,21 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
   const ongoingForDay = !!periodForDay && !periodForDay.ended_on
   const todaysSymptoms = useMemo(() => (data?.symptoms ?? []).filter((s) => s.recorded_on === day), [data, day])
   const savedNotes = useMemo(() => todaysSymptoms.filter((s) => s.kind === 'note'), [todaysSymptoms])
+  // The one note a day carries, which is what the picker and textarea edit. Days
+  // logged before the app stopped appending may hold several; the newest wins so
+  // there is always a single record to update.
+  const dayNote = useMemo(
+    () => savedNotes.reduce<Symptom | undefined>((newest, n) => (!newest || n.id > newest.id ? n : newest), undefined),
+    [savedNotes],
+  )
+  const earlierNotes = useMemo(() => savedNotes.filter((n) => n.id !== dayNote?.id), [savedNotes, dayNote])
+  // Reseed the picker and draft whenever the day changes or the saved note does,
+  // so the chips show what was actually logged instead of a stale default.
+  useEffect(() => {
+    const parsed = parseDayNote(dayNote?.notes ?? '')
+    setMoodSelection(parsed.moods)
+    setNote(parsed.text)
+  }, [day, dayNote?.id, dayNote?.notes])
 
   async function endPeriod() {
     if (!active) return
@@ -61,11 +73,24 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
     setMoodSelection((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]))
   }
 
+  // Moods alone are a valid log, so the button is live when either the picker or
+  // the draft has content — or when there is a saved note left to clear.
+  const canSaveNote = moodSelection.length > 0 || note.trim().length > 0 || !!dayNote
+
   async function saveNote() {
-    if (!note.trim()) return
-    const moodText = moodSelection.length ? moodSelection.join(', ') : 'none'
-    await client.createSymptom({ recorded_on: day, kind: 'note', severity: 3, notes: `Mood: ${moodText}. ${note}` }).catch((e) => Alert.alert('Failed', e.message))
-    setNote('')
+    const text = note.trim()
+    try {
+      if (!moodSelection.length && !text) {
+        // Both emptied: removing the note is clearer than storing an empty one.
+        if (dayNote) await client.deleteSymptom(dayNote.id)
+      } else {
+        const notes = formatDayNote(moodSelection, text)
+        if (dayNote) await client.updateSymptom(dayNote.id, { recorded_on: day, kind: 'note', severity: 3, notes })
+        else await client.createSymptom({ recorded_on: day, kind: 'note', severity: 3, notes })
+      }
+    } catch (e: any) {
+      Alert.alert('Failed', e.message)
+    }
     refresh()
   }
 
@@ -140,7 +165,7 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
         <Text style={styles.cardHint}>Optional — mood, sleep, energy, anything worth remembering.</Text>
         <Text style={styles.fieldLabel}>Mood (pick any)</Text>
         <View style={styles.chipWrap}>
-          {moods.map((m) => {
+          {MOODS.map((m) => {
             const picked = moodSelection.includes(m)
             return (
               <Pressable key={m} onPress={() => toggleMood(m)} style={[styles.chip, picked && styles.chipActive]}>
@@ -153,13 +178,13 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
           })}
         </View>
         <TextInput style={styles.textarea} placeholder="Notes, sleep, energy, bowel movements…" value={note} onChangeText={setNote} multiline />
-        <Pressable style={[styles.primaryBtn, !note.trim() && styles.disabled]} onPress={saveNote} disabled={!note.trim()}>
+        <Pressable style={[styles.primaryBtn, !canSaveNote && styles.disabled]} onPress={saveNote} disabled={!canSaveNote}>
           <Text style={styles.primaryBtnText}>Save note</Text>
         </Pressable>
-        {savedNotes.length > 0 && (
+        {earlierNotes.length > 0 && (
           <View style={{ marginTop: 14, gap: 8 }}>
-            <Text style={styles.fieldLabel}>Saved notes for this day</Text>
-            {savedNotes.map((n) => (
+            <Text style={styles.fieldLabel}>Earlier notes for this day</Text>
+            {earlierNotes.map((n) => (
               <View key={n.id} style={styles.noteRow}>
                 <Text style={styles.noteText}>{n.notes}</Text>
               </View>

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isNoteKind, isTrackKind, isSymptomKind, trackKey, symptomsByPhase } from '../src/index.ts'
+import { isNoteKind, isTrackKind, isSymptomKind, trackKey, symptomsByPhase, parseDayNote, formatDayNote } from '../src/index.ts'
 
 test('note and indicator values are not symptoms', () => {
   assert.equal(isNoteKind('note'), true)
@@ -31,4 +31,28 @@ test('the phase correlation ignores notes and indicator values', () => {
   const periods = [{ started_on: '2026-03-01', ended_on: '2026-03-05', flow: 'medium', days: [], notes: '' }]
   const rows = [...symptomsByPhase(symptoms, periods, 28).values()].flat()
   assert.deepEqual(rows.map((r) => r.label), ['Cramps'])
+})
+
+test('a day note round-trips its moods and text', () => {
+  const cases = [
+    { moods: ['Calm', 'Happy'], text: 'Slept well. Woke early.' },
+    { moods: ['Calm'], text: '' },
+    { moods: [], text: 'Just a plain note.' },
+    { moods: [], text: '' },
+  ]
+  for (const c of cases) {
+    assert.deepEqual(parseDayNote(formatDayNote(c.moods, c.text)), c)
+  }
+})
+
+test('a note written by the Flo importer reads back', () => {
+  assert.deepEqual(parseDayNote('Mood: Calm, Happy. Slept well.'), { moods: ['Calm', 'Happy'], text: 'Slept well.' })
+  // The importer writes no trailing space, and no prefix at all when there is no mood.
+  assert.deepEqual(parseDayNote('Mood: Calm, Happy.'), { moods: ['Calm', 'Happy'], text: '' })
+  assert.deepEqual(parseDayNote('A plain imported note.'), { moods: [], text: 'A plain imported note.' })
+})
+
+test('the legacy "Mood: none." form carries no mood', () => {
+  assert.deepEqual(parseDayNote('Mood: none. Tired.'), { moods: [], text: 'Tired.' })
+  assert.deepEqual(parseDayNote(''), { moods: [], text: '' })
 })

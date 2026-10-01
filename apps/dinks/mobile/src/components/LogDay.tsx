@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 import type { Period, Symptom } from '@dinks/shared'
-import { symptomEmoji } from '../lib/emoji'
+import { symptomEmoji } from '@dinks/shared'
 import { COLORS } from '../lib/theme'
 
 export const SYMPTOM_KINDS = ['Cramps', 'Headache', 'Bloating', 'Fatigue', 'Tender breasts', 'Mood swings', 'Acne', 'Nausea']

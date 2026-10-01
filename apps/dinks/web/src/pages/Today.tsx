@@ -3,13 +3,12 @@ import { client } from '../api'
 import { useDashboard } from '../useDashboard'
 import { useSelectedDate, todayISO } from '../useSelectedDate'
 import { periodOnDay, flowOnDay } from '../lib/periods'
-import { phaseOn, PHASES } from '@dinks/shared'
+import { phaseOn, PHASES, parseDayNote, formatDayNote, type Symptom } from '@dinks/shared'
 import { useMutationToast } from '../useToast'
-import { symptomEmoji, moodEmoji, flowEmoji, flowLabel } from '../lib/emoji'
+import { symptomEmoji, moodEmoji, flowEmoji, flowLabel, MOODS } from '../lib/emoji'
 import FlowPicker from '../components/FlowPicker'
 import LogDay from '../components/LogDay'
 
-const moods = ['Calm', 'Happy', 'Sensitive', 'Irritable', 'Anxious', 'Sad', 'Energetic', 'Tired', 'Confident', 'Stressed', 'Grateful', 'Confused']
 const symptomKinds = ['Cramps', 'Headache', 'Bloating', 'Fatigue', 'Tender breasts']
 
 export default function Today() {
@@ -19,7 +18,7 @@ export default function Today() {
   // Follow the member's preference for the level a new period starts with. The
   // preferences load after the first render, so this is what actually seeds it.
   useEffect(() => { setFlow(preferences.default_flow) }, [preferences.default_flow])
-  const [moodSelection, setMoodSelection] = useState<string[]>(['Calm'])
+  const [moodSelection, setMoodSelection] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [dayEditorOpen, setDayEditorOpen] = useState(false)
   const [busyKind, setBusyKind] = useState<string | null>(null)
@@ -39,6 +38,21 @@ export default function Today() {
   const isFuture = day > todayIso
   const todaysSymptoms = useMemo(() => (data?.symptoms ?? []).filter((s) => s.recorded_on === day), [data, day])
   const savedNotes = useMemo(() => todaysSymptoms.filter((s) => s.kind === 'note'), [todaysSymptoms])
+  // The one note a day carries, which is what the picker and textarea edit. Days
+  // logged before the app stopped appending may hold several; the newest wins so
+  // there is always a single record to update.
+  const dayNote = useMemo(
+    () => savedNotes.reduce<Symptom | undefined>((newest, n) => (!newest || n.id > newest.id ? n : newest), undefined),
+    [savedNotes],
+  )
+  const earlierNotes = useMemo(() => savedNotes.filter((n) => n.id !== dayNote?.id), [savedNotes, dayNote])
+  // Reseed the picker and draft whenever the day changes or the saved note does,
+  // so the chips show what was actually logged instead of a stale default.
+  useEffect(() => {
+    const parsed = parseDayNote(dayNote?.notes ?? '')
+    setMoodSelection(parsed.moods)
+    setNote(parsed.text)
+  }, [day, dayNote?.id, dayNote?.notes])
   /** The flow recorded for the selected day, which may differ from the period's summary. */
   const dayFlow = periodForDay ? flowOnDay(periodForDay, day) : flow
 
@@ -92,11 +106,25 @@ export default function Today() {
     setMoodSelection((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]))
   }
 
+  // Moods alone are a valid log, so the button is live when either the picker or
+  // the draft has content — or when there is a saved note left to clear.
+  const canSaveNote = moodSelection.length > 0 || note.trim().length > 0 || !!dayNote
+
   async function saveNote() {
-    if (!note.trim()) return
-    const moodText = moodSelection.length ? moodSelection.join(', ') : 'none'
-    await run(() => client.createSymptom({ recorded_on: day, kind: 'note', severity: 3, notes: `Mood: ${moodText}. ${note}` }), 'Note saved').catch(() => undefined)
-    setNote('')
+    const text = note.trim()
+    if (!moodSelection.length && !text) {
+      // Both emptied: removing the note is clearer than storing an empty one.
+      if (dayNote) await run(() => client.deleteSymptom(dayNote.id), 'Note cleared').catch(() => undefined)
+    } else {
+      const notes = formatDayNote(moodSelection, text)
+      await run(
+        () =>
+          dayNote
+            ? client.updateSymptom(dayNote.id, { recorded_on: day, kind: 'note', severity: 3, notes })
+            : client.createSymptom({ recorded_on: day, kind: 'note', severity: 3, notes }),
+        'Note saved',
+      ).catch(() => undefined)
+    }
     refresh()
   }
 
@@ -209,7 +237,7 @@ export default function Today() {
         <p className="mb-3 text-xs text-slate-400">Optional — mood, sleep, energy, anything worth remembering.</p>
         <label className="mb-2 block text-sm font-medium text-slate-600">Mood (pick any)</label>
         <div className="flex flex-wrap gap-2">
-          {moods.map((m) => {
+          {MOODS.map((m) => {
             const picked = moodSelection.includes(m)
             return (
               <button
@@ -233,15 +261,15 @@ export default function Today() {
         <button
           className="mt-3 w-full rounded-xl bg-brand-500 py-2.5 font-semibold text-white disabled:opacity-40"
           onClick={saveNote}
-          disabled={!note.trim()}
+          disabled={!canSaveNote}
         >
           Save note
         </button>
 
-        {savedNotes.length > 0 && (
+        {earlierNotes.length > 0 && (
           <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saved notes for this day</h3>
-            {savedNotes.map((n) => (
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Earlier notes for this day</h3>
+            {earlierNotes.map((n) => (
               <p key={n.id} className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
                 {n.notes}
               </p>

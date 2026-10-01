@@ -1,3 +1,8 @@
+/**
+ * Local-calendar date helpers. Shared by web and mobile so a day means the same
+ * thing in both: `toISO` reads the Date's local getters rather than toISOString,
+ * because a member logs the day they woke up on, not the UTC one.
+ */
 export function todayISO() {
   return toISO(new Date())
 }
