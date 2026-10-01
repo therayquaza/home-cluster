@@ -11,7 +11,7 @@ export const PHASES: { key: PhaseName; label: string; blurb: string }[] = [
 ]
 
 /** The luteal phase is conventionally ~14 days, which places ovulation too. */
-const LUTEAL_DAYS = 14
+export const LUTEAL_DAYS = 14
 
 export type DayPhase = { day: number; phase: PhaseName; cycleDay: number; cycleLength: number }
 

@@ -5,6 +5,10 @@ export const COLORS = {
   brand300: '#ec9bbe',
   brand500: '#cc4f82',
   brand700: '#9c3a63',
+  // Ovulation is a distinct estimate from a period day; teal keeps it from
+  // reading as another shade of the period pink.
+  ovulation300: '#5eead4',
+  ovulation500: '#0d9488',
   bg: '#fff8fb',
   slate400: '#94a3b8',
   slate500: '#64748b',

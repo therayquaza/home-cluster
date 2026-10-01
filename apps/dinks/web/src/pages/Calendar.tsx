@@ -3,8 +3,9 @@ import { DayPicker } from 'react-day-picker'
 import type { FlowDay, Period } from '@dinks/shared'
 import { useDashboard } from '../useDashboard'
 import { useSelectedDate, todayISO } from '../useSelectedDate'
-import { toDate, toISO } from '../lib/dates'
+import { toDate, toISO, formatDateRange, formatShortDate } from '../lib/dates'
 import { periodOnDay, flowByDate, flowOnDay } from '../lib/periods'
+import { predictCycle } from '../lib/predictions'
 import { client } from '../api'
 import { useMutationToast } from '../useToast'
 import { flowEmoji, flowLabel } from '../lib/emoji'
@@ -39,7 +40,11 @@ export default function CalendarPage() {
     return set
   }, [data])
 
-  const predictedDate = data?.next_period
+  // Predictions widen the server's single `next_period` start into the span of
+  // days the period is expected to cover, plus this cycle's ovulation window.
+  const predictions = useMemo(() => predictCycle(data?.periods ?? [], data?.next_period, todayIso), [data, todayIso])
+  const predictedDays = useMemo(() => new Set(predictions.nextPeriod?.days ?? []), [predictions])
+  const ovulationDays = useMemo(() => new Set(predictions.ovulation?.days ?? []), [predictions])
   const selectedPeriod = useMemo(() => periodOnDay(data?.periods ?? [], selectedDate, todayIso), [data, selectedDate, todayIso])
   const selectedFlow = selectedPeriod ? flowOnDay(selectedPeriod, selectedDate) : undefined
 
@@ -118,7 +123,9 @@ function withoutDay(p: Period, iso: string): FlowDay[] {
           selected={selected}
           onSelect={handleSelect}
           modifiers={{
-            predicted: (date) => predictedDate === toISO(date),
+            predicted: (date) => predictedDays.has(toISO(date)),
+            ovulation: (date) => ovulationDays.has(toISO(date)),
+            ovulationPeak: (date) => predictions.ovulation?.peak === toISO(date),
             symptom: (date) => symptomDates.has(toISO(date)),
             today: (date) => toISO(date) === todayIso,
             flowLight: (date) => flowByDay.get(toISO(date)) === 'light',
@@ -131,6 +138,8 @@ function withoutDay(p: Period, iso: string): FlowDay[] {
           }}
           modifiersClassNames={{
             predicted: 'rdp-day_predicted',
+            ovulation: 'rdp-day_ovulation',
+            ovulationPeak: 'rdp-day_ovulation_peak',
             symptom: 'rdp-day_symptom',
             today: 'rdp-day_today',
             flowLight: 'rdp-day_flow_light',
@@ -141,6 +150,18 @@ function withoutDay(p: Period, iso: string): FlowDay[] {
           className="mx-auto"
         />
       </div>
+
+      {(predictions.nextPeriod || predictions.ovulation) && (
+        <p className="mt-3 px-1 text-center text-xs text-slate-500">
+          {predictions.nextPeriod && <span>Next period {formatDateRange(predictions.nextPeriod.start, predictions.nextPeriod.end)}</span>}
+          {predictions.nextPeriod && predictions.ovulation && <span> · </span>}
+          {predictions.ovulation && (
+            <span>
+              Ovulation ~{formatShortDate(predictions.ovulation.peak)} <span className="text-slate-400">({formatDateRange(predictions.ovulation.days[0], predictions.ovulation.days[predictions.ovulation.days.length - 1])})</span>
+            </span>
+          )}
+        </p>
+      )}
 
       {/* Live editor for the selected day: edit the period and its flow in place. */}
       {selectedPeriod ? (
@@ -200,7 +221,13 @@ function withoutDay(p: Period, iso: string): FlowDay[] {
           <span className="h-3 w-3 rounded-full border border-brand-100 bg-brand-50" /> Not recorded
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full border-2 border-dashed border-brand-500" /> Predicted
+          <span className="h-3 w-3 rounded-full border-2 border-dashed border-brand-500" /> Predicted period
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full border-2 border-ovulation-300" /> Ovulation
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full bg-ovulation-500" /> Ovulation (peak)
         </span>
       </div>
 

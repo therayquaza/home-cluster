@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser'
 
 WebBrowser.maybeCompleteAuthSession()
 
-const TOKEN_KEY = 'dinks_access_token'
+const TOKEN_KEY = 'dinks_id_token'
 
 const issuer = process.env.EXPO_PUBLIC_OIDC_ISSUER ?? 'https://keycloak.internal.rayq.app/realms/home'
 const clientId = process.env.EXPO_PUBLIC_OIDC_CLIENT_ID ?? 'dinks-mobile'
@@ -19,7 +19,13 @@ const clientId = process.env.EXPO_PUBLIC_OIDC_CLIENT_ID ?? 'dinks-mobile'
  */
 export const redirectUri = AuthSession.makeRedirectUri({ scheme: 'dinks', path: 'oauthredirect' })
 
-/** The OIDC access token, when the member signed in with Keycloak. */
+/**
+ * The OIDC ID token, when the member signed in with Keycloak. The backend
+ * verifies a mobile bearer token by audience, expecting `dinks-mobile`; only the
+ * ID token carries that, since a Keycloak access token's audience is "account".
+ * Sending the access token here is what produced "expected audience
+ * dinks-mobile got [account]" and a 401 on every request.
+ */
 export const token = () => SecureStore.getItemAsync(TOKEN_KEY)
 
 /**
@@ -46,10 +52,15 @@ export async function signInWithKeycloak(): Promise<boolean> {
     { clientId, code: response.params.code, redirectUri, extraParams: { code_verifier: codeVerifier } },
     discovery,
   )
-  if (!tokens.accessToken) throw new Error('No access token returned')
-  await SecureStore.setItemAsync(TOKEN_KEY, tokens.accessToken)
+  const idToken = tokens.idToken
+  if (!idToken) throw new Error('No ID token returned')
+  await SecureStore.setItemAsync(TOKEN_KEY, idToken)
   return true
 }
 
 /** Clears the Keycloak token. The session cookie is cleared by POST /auth/logout. */
-export const signOut = () => SecureStore.deleteItemAsync(TOKEN_KEY)
+export const signOut = async () => {
+  await SecureStore.deleteItemAsync(TOKEN_KEY)
+  // Remove a token left by older builds, which stored the wrong one.
+  await SecureStore.deleteItemAsync('dinks_access_token')
+}

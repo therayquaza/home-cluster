@@ -9,6 +9,11 @@
   --color-brand-700: #9c3a63;
   --color-brand: #cc4f82;
   --color-brand-bg: #fff8fb;
+  /* Ovulation is a distinct estimate, not a period day: a teal accent keeps it
+     from reading as another shade of the period pink. */
+  --color-ovulation-100: #ccfbf1;
+  --color-ovulation-300: #5eead4;
+  --color-ovulation-500: #0d9488;
 }
 
 body {
@@ -75,4 +80,23 @@ body {
   height: 5px;
   border-radius: 9999px;
   background: var(--color-brand-700);
+}
+
+/* Ovulation is an estimate, so its days are ringed rather than filled; the peak
+   is the single most probable date and gets the solid fill. Declared after the
+   flow/today rules so the teal ring survives when a day is also "today". */
+.rdp-day_ovulation {
+  box-shadow: inset 0 0 0 2px var(--color-ovulation-300);
+  border-radius: 9999px;
+}
+
+.rdp-day_ovulation_peak {
+  background-color: var(--color-ovulation-500) !important;
+  color: white !important;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.rdp-day_ovulation_peak.rdp-day_today {
+  box-shadow: inset 0 0 0 2px white;
 }

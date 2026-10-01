@@ -91,6 +91,7 @@ export * from './dates.ts'
 export * from './periods.ts'
 export * from './cycleStats.ts'
 export * from './emoji.ts'
+export * from './predictions.ts'
 
 export function api(fetcher: Fetcher) {
   return {

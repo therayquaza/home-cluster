@@ -3,7 +3,9 @@ import { client } from '../api'
 import { useDashboard } from '../useDashboard'
 import { useSelectedDate, todayISO } from '../useSelectedDate'
 import { periodOnDay, flowOnDay } from '../lib/periods'
-import { phaseOn, PHASES, parseDayNote, formatDayNote, type Symptom } from '@dinks/shared'
+import { formatDateRange, formatShortDate } from '../lib/dates'
+import { predictCycle } from '../lib/predictions'
+import { phaseOn, PHASES, avgCycleLength, parseDayNote, formatDayNote, type Symptom } from '@dinks/shared'
 import { useMutationToast } from '../useToast'
 import { symptomEmoji, moodEmoji, flowEmoji, flowLabel, MOODS } from '../lib/emoji'
 import FlowPicker from '../components/FlowPicker'
@@ -27,7 +29,11 @@ export default function Today() {
   const todayIso = todayISO()
   // The phase of the day being shown, not necessarily today — the header can be
   // pointing at any date the user navigated to.
-  const phase = useMemo(() => phaseOn(day, data?.periods ?? []), [day, data])
+  // Use the member's own average cycle so the phase label agrees with the
+  // ovulation estimate the calendar draws from the same number.
+  const avgCycleDays = useMemo(() => avgCycleLength(data?.periods ?? []), [data])
+  const phase = useMemo(() => phaseOn(day, data?.periods ?? [], avgCycleDays), [day, data, avgCycleDays])
+  const predictions = useMemo(() => predictCycle(data?.periods ?? [], data?.next_period, todayIso), [data, todayIso])
   const isToday = day === todayIso
 
   // The globally active (unfinished) period, if any — at most one can exist.
@@ -138,8 +144,8 @@ export default function Today() {
         <p className="text-sm text-slate-600">
           {periodForDay
             ? `Started ${periodForDay.started_on}${periodForDay.ended_on ? `, ended ${periodForDay.ended_on}` : ''}.`
-            : data?.next_period
-              ? `Predicted next period: ${data.next_period}.`
+            : predictions.nextPeriod
+              ? `Predicted next period: ${formatDateRange(predictions.nextPeriod.start, predictions.nextPeriod.end)}.`
               : 'Log two periods to receive an estimate.'}
         </p>
 
@@ -148,6 +154,13 @@ export default function Today() {
         {phase.phase !== 'unknown' && (
           <p className="mt-1 text-sm text-slate-600">
             {PHASES.find((p) => p.key === phase.phase)?.label} · day {phase.cycleDay} of {phase.cycleLength}
+          </p>
+        )}
+
+        {/* The estimated ovulation day for the current cycle, alongside the phase. */}
+        {predictions.ovulation && (
+          <p className="mt-1 text-sm text-slate-600">
+            Estimated ovulation: ~{formatShortDate(predictions.ovulation.peak)}
           </p>
         )}
 

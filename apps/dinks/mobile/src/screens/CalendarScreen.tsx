@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { Dashboard } from '@dinks/shared'
-import { periodDaySet, periodOnDay, toISO, todayISO } from '@dinks/shared'
+import { periodDaySet, periodOnDay, predictCycle, toISO, todayISO, formatDateRange, formatShortDate } from '@dinks/shared'
 import type { ApiClient } from '../api'
 import { COLORS } from '../lib/theme'
 import LogDay from '../components/LogDay'
@@ -22,7 +22,11 @@ export default function CalendarScreen({ client, data, refresh, selectedDate, on
     for (const s of data?.symptoms ?? []) set.add(s.recorded_on)
     return set
   }, [data])
-  const predictedDate = data?.next_period
+  // Widen the server's single `next_period` start into the expected period span,
+  // plus the ovulation window for the cycle that ends at that start.
+  const predictions = useMemo(() => predictCycle(data?.periods ?? [], data?.next_period, todayIso), [data, todayIso])
+  const predictedDays = useMemo(() => new Set(predictions.nextPeriod?.days ?? []), [predictions])
+  const ovulationDays = useMemo(() => new Set(predictions.ovulation?.days ?? []), [predictions])
 
   const grid = useMemo(() => {
     const first = new Date(month.getFullYear(), month.getMonth(), 1)
@@ -73,7 +77,9 @@ export default function CalendarScreen({ client, data, refresh, selectedDate, on
             const isToday = iso === todayIso
             const isSelected = iso === selectedDate
             const isPeriod = periodDates.has(iso)
-            const isPredicted = predictedDate === iso
+            const isPredicted = predictedDays.has(iso)
+            const isOvulation = ovulationDays.has(iso)
+            const isOvulationPeak = iso === predictions.ovulation?.peak
             const isSymptom = symptomDates.has(iso)
             return (
               <Pressable key={i} style={styles.cell} onPress={() => handlePress(iso)}>
@@ -82,11 +88,13 @@ export default function CalendarScreen({ client, data, refresh, selectedDate, on
                     styles.cellInner,
                     isPeriod && { backgroundColor: COLORS.brand500 },
                     isPredicted && !isPeriod && styles.predictedCell,
+                    isOvulation && !isOvulationPeak && !isPeriod && styles.ovulationCell,
+                    isOvulationPeak && !isPeriod && styles.ovulationPeakCell,
                     isToday && !isPeriod && styles.todayCell,
                     isSelected && !isPeriod && styles.selectedCell,
                   ]}
                 >
-                  <Text style={[styles.cellText, isPeriod && { color: COLORS.white }]}>{d.getDate()}</Text>
+                  <Text style={[styles.cellText, (isPeriod || isOvulationPeak) && { color: COLORS.white }]}>{d.getDate()}</Text>
                   {isSymptom && <View style={styles.cellDot} />}
                 </View>
               </Pressable>
@@ -95,6 +103,14 @@ export default function CalendarScreen({ client, data, refresh, selectedDate, on
         </View>
       </View>
 
+      {(predictions.nextPeriod || predictions.ovulation) && (
+        <Text style={styles.predictionLine}>
+          {predictions.nextPeriod ? `Next period ${formatDateRange(predictions.nextPeriod.start, predictions.nextPeriod.end)}` : ''}
+          {predictions.nextPeriod && predictions.ovulation ? ' · ' : ''}
+          {predictions.ovulation ? `Ovulation ~${formatShortDate(predictions.ovulation.peak)}` : ''}
+        </Text>
+      )}
+
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: COLORS.brand500 }]} />
@@ -102,7 +118,15 @@ export default function CalendarScreen({ client, data, refresh, selectedDate, on
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { borderWidth: 2, borderColor: COLORS.brand500, backgroundColor: 'transparent' }]} />
-          <Text style={styles.legendText}>Predicted</Text>
+          <Text style={styles.legendText}>Predicted period</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { borderWidth: 2, borderColor: COLORS.ovulation300, backgroundColor: 'transparent' }]} />
+          <Text style={styles.legendText}>Ovulation</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: COLORS.ovulation500 }]} />
+          <Text style={styles.legendText}>Ovulation (peak)</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { width: 6, height: 6, backgroundColor: COLORS.brand700 }]} />
@@ -158,8 +182,11 @@ const styles = StyleSheet.create({
   cellInner: { width: '78%', height: '78%', borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   cellText: { fontSize: 13, color: COLORS.slate700 },
   predictedCell: { borderWidth: 2, borderColor: COLORS.brand500, borderStyle: 'dashed' },
+  ovulationCell: { borderWidth: 2, borderColor: COLORS.ovulation300 },
+  ovulationPeakCell: { backgroundColor: COLORS.ovulation500 },
   todayCell: { borderWidth: 2, borderColor: COLORS.brand700 },
   selectedCell: { backgroundColor: COLORS.brand100 },
+  predictionLine: { textAlign: 'center', fontSize: 12, color: COLORS.slate500 },
   cellDot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.brand700 },
   legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },

@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import type { Dashboard, Prediction, Symptom } from '@dinks/shared'
-import { periodOnDay, todayISO, symptomEmoji, moodEmoji, MOODS, parseDayNote, formatDayNote } from '@dinks/shared'
+import type { Dashboard, Symptom } from '@dinks/shared'
+import {
+  periodOnDay,
+  todayISO,
+  symptomEmoji,
+  moodEmoji,
+  MOODS,
+  parseDayNote,
+  formatDayNote,
+  predictCycle,
+  formatDateRange,
+  formatShortDate,
+  PREDICTION_DISCLAIMER,
+} from '@dinks/shared'
 import type { ApiClient } from '../api'
 import { COLORS } from '../lib/theme'
 import LogDay from '../components/LogDay'
@@ -19,11 +31,10 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
   const [moodSelection, setMoodSelection] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
-  const [prediction, setPrediction] = useState<Prediction>()
 
-  useEffect(() => {
-    client.prediction().then(setPrediction).catch(() => undefined)
-  }, [data])
+  // Same shared estimate the web app uses: the next period as a span of days and
+  // this cycle's ovulation window, derived from the periods the dashboard returns.
+  const predictions = useMemo(() => predictCycle(data?.periods ?? [], data?.next_period, todayIso), [data, todayIso])
 
   const active = useMemo(() => data?.periods.find((p) => !p.ended_on), [data])
   const periodForDay = useMemo(() => periodOnDay(data?.periods ?? [], day, todayIso), [data, day, todayIso])
@@ -102,10 +113,11 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
         <Text style={styles.heroSub}>
           {periodForDay
             ? `Started ${periodForDay.started_on}${periodForDay.ended_on ? `, ended ${periodForDay.ended_on}` : ''}.`
-            : prediction?.predicted_period_start
-              ? `Predicted next period: ${prediction.predicted_period_start}.`
+            : predictions.nextPeriod
+              ? `Predicted next period: ${formatDateRange(predictions.nextPeriod.start, predictions.nextPeriod.end)}.`
               : 'Log two periods to receive an estimate.'}
         </Text>
+        {predictions.ovulation && <Text style={styles.heroSub}>Estimated ovulation: ~{formatShortDate(predictions.ovulation.peak)}</Text>}
 
         {isFuture ? (
           <Text style={styles.hint}>Can't log a period for a future day.</Text>
@@ -193,7 +205,7 @@ export default function Today({ client, data, refresh, selectedDate }: Props) {
         )}
       </View>
 
-      <Text style={styles.disclaimer}>{prediction?.disclaimer ?? 'Estimates are not medical advice.'}</Text>
+      <Text style={styles.disclaimer}>{PREDICTION_DISCLAIMER}</Text>
 
       <Pressable style={styles.fab} onPress={() => setEditorOpen(true)}>
         <Text style={styles.fabText}>+</Text>

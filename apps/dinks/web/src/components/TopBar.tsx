@@ -4,6 +4,7 @@ import { useDashboard } from '../useDashboard'
 import { useSelectedDate, todayISO } from '../useSelectedDate'
 import { toISO, toDate } from '../lib/dates'
 import { periodOnDay, flowOnDay } from '../lib/periods'
+import { predictCycle } from '../lib/predictions'
 import { flowEmoji } from '../lib/emoji'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -33,6 +34,12 @@ export default function TopBar() {
     const [y, m, d] = selectedDate.split('-').map(Number)
     return new Date(y, m - 1, d)
   }, [selectedDate])
+
+  // The strip is only seven days wide, so this catches the predicted period and
+  // ovulation days whenever they scroll into view.
+  const predictions = useMemo(() => predictCycle(data?.periods ?? [], data?.next_period, todayIso), [data, todayIso])
+  const predictedDays = useMemo(() => new Set(predictions.nextPeriod?.days ?? []), [predictions])
+  const ovulationDays = useMemo(() => new Set(predictions.ovulation?.days ?? []), [predictions])
 
   return (
     <header className="sticky top-0 z-30 bg-brand-bg/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] backdrop-blur">
@@ -86,7 +93,9 @@ export default function TopBar() {
             // Ongoing: period started, not yet marked ended — still being registered. Closed: a finished, logged period day.
             const ongoing = !!period && !period.ended_on
             const closed = !!period && !!period.ended_on
-            const predicted = day.iso === data?.next_period
+            const predicted = predictedDays.has(day.iso)
+            const ovulation = ovulationDays.has(day.iso)
+            const ovulationPeak = day.iso === predictions.ovulation?.peak
             const symptom = data?.symptoms.some((s) => s.recorded_on === day.iso)
             const onPeriod = ongoing || closed
             const flow = period ? flowOnDay(period, day.iso) : undefined
@@ -97,7 +106,7 @@ export default function TopBar() {
                   setSelectedDate(day.iso)
                   if (location.pathname !== '/today') navigate('/today')
                 }}
-                aria-label={`${WEEKDAYS_FULL[toDate(day.iso).getDay()]} ${day.dayNum}${isToday ? ', today' : ''}${isSelected ? ', selected' : ''}${onPeriod ? ', period day' : ''}`}
+                aria-label={`${WEEKDAYS_FULL[toDate(day.iso).getDay()]} ${day.dayNum}${isToday ? ', today' : ''}${isSelected ? ', selected' : ''}${onPeriod ? ', period day' : ''}${ovulationPeak ? ', estimated ovulation day' : ovulation ? ', estimated ovulation window' : ''}${predicted ? ', predicted period day' : ''}`}
                 aria-current={isToday ? 'date' : undefined}
                 className={`relative flex flex-1 flex-col items-center gap-1 rounded-2xl py-2 text-xs font-medium transition ${
                   isSelected
@@ -108,7 +117,11 @@ export default function TopBar() {
                         ? 'bg-brand-100 text-brand-700'
                         : predicted
                           ? 'border-2 border-dashed border-brand-500 text-brand-700'
-                          : 'text-slate-500'
+                          : ovulationPeak
+                            ? 'bg-ovulation-500 text-white'
+                            : ovulation
+                              ? 'ring-2 ring-ovulation-300 text-ovulation-500'
+                              : 'text-slate-500'
                 }`}
               >
                 <span className="uppercase tracking-wide">{day.weekday}</span>
@@ -133,6 +146,8 @@ export default function TopBar() {
                   {onPeriod && <span aria-hidden="true" className="text-[10px] leading-none">{flowEmoji(flow ?? 'unknown')}</span>}
                 </span>
                 {predicted && !period && <span className="sr-only">Predicted period day</span>}
+                {ovulationPeak && <span className="sr-only">Estimated ovulation day</span>}
+                {ovulation && !ovulationPeak && <span className="sr-only">Estimated ovulation window</span>}
                 {ongoing && <span className="sr-only">Period day, still ongoing</span>}
                 {closed && <span className="sr-only">Period day, ended</span>}
                 {symptom && <span className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-brand-700" aria-hidden="true" />}

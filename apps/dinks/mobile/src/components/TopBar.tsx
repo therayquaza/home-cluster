@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { Dashboard } from '@dinks/shared'
-import { flowEmoji, flowOnDay, periodOnDay, toDate, toISO, todayISO } from '@dinks/shared'
+import { flowEmoji, flowOnDay, periodOnDay, predictCycle, toDate, toISO, todayISO } from '@dinks/shared'
 import { COLORS } from '../lib/theme'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -37,6 +37,12 @@ export default function TopBar({ data, displayName, selectedDate, onSelect, onOp
 
   const selected = useMemo(() => toDate(selectedDate), [selectedDate])
 
+  // The strip is only seven days wide, so this catches the predicted period and
+  // ovulation days whenever they scroll into view.
+  const predictions = useMemo(() => predictCycle(data?.periods ?? [], data?.next_period, todayIso), [data, todayIso])
+  const predictedDays = useMemo(() => new Set(predictions.nextPeriod?.days ?? []), [predictions])
+  const ovulationDays = useMemo(() => new Set(predictions.ovulation?.days ?? []), [predictions])
+
   return (
     <View style={styles.header}>
       <View style={styles.titleRow}>
@@ -65,13 +71,26 @@ export default function TopBar({ data, displayName, selectedDate, onSelect, onOp
             const period = periodOnDay(data?.periods ?? [], day.iso, todayIso)
             const ongoing = !!period && !period.ended_on
             const closed = !!period && !!period.ended_on
-            const predicted = day.iso === data?.next_period
+            const predicted = predictedDays.has(day.iso)
+            const ovulation = ovulationDays.has(day.iso)
+            const ovulationPeak = day.iso === predictions.ovulation?.peak
             const symptom = data?.symptoms.some((s) => s.recorded_on === day.iso)
             const onPeriod = ongoing || closed
             const flow = period ? flowOnDay(period, day.iso) : undefined
 
-            const cellStyle = isSelected || ongoing ? styles.cellOn : closed ? styles.cellClosed : predicted ? styles.cellPredicted : null
-            const textColor = isSelected || ongoing ? COLORS.white : closed ? COLORS.brand700 : COLORS.slate500
+            const cellStyle =
+              isSelected || ongoing
+                ? styles.cellOn
+                : closed
+                  ? styles.cellClosed
+                  : predicted
+                    ? styles.cellPredicted
+                    : ovulationPeak
+                      ? styles.cellOvulationPeak
+                      : ovulation
+                        ? styles.cellOvulation
+                        : null
+            const textColor = isSelected || ongoing || ovulationPeak ? COLORS.white : closed ? COLORS.brand700 : COLORS.slate500
             const todayCircle = isToday ? (isSelected ? styles.todayOnSelected : onPeriod ? styles.todayOnPeriod : styles.todayIdle) : null
             const todayText = isToday ? (isSelected ? COLORS.brand700 : COLORS.white) : undefined
 
@@ -120,6 +139,8 @@ const styles = StyleSheet.create({
   cellOn: { backgroundColor: COLORS.brand500 },
   cellClosed: { backgroundColor: COLORS.brand100 },
   cellPredicted: { borderWidth: 2, borderColor: COLORS.brand500, borderStyle: 'dashed' },
+  cellOvulation: { borderWidth: 2, borderColor: COLORS.ovulation300 },
+  cellOvulationPeak: { backgroundColor: COLORS.ovulation500 },
   weekday: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
   dayNumRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   dayNumWrap: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
