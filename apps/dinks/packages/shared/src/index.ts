@@ -1,14 +1,48 @@
-export type Period = { id: number; started_on: string; ended_on?: string; flow: string; notes?: string }
+export type FlowDay = { date: string; flow: string }
+export type Period = { id: number; started_on: string; ended_on?: string; flow: string; days?: FlowDay[]; notes?: string }
 export type Symptom = { id: number; recorded_on: string; kind: string; severity: number; notes?: string }
 export type Dashboard = { periods: Period[]; symptoms: Symptom[]; next_period?: string; reminder?: string }
-export type PeriodInput = { started_on: string; ended_on?: string; flow: string; notes?: string }
+export type PeriodInput = { started_on: string; ended_on?: string; flow: string; days?: FlowDay[]; notes?: string }
 export type SymptomInput = { recorded_on: string; kind: string; severity: number; notes?: string }
 export type RegisterInput = { email: string; password: string; display_name: string }
 export type LoginInput = { email: string; password: string }
 export type Me = { display_name: string }
+export type Tracker = { key: string; label: string; emoji: string; unit?: string }
+export type Preferences = { default_flow: string; reminder_enabled: boolean; reminder_lead_days: number; trackers: Tracker[] }
+/** Partial update — only the fields present are changed. */
+export type PreferencesInput = { default_flow?: string; reminder_enabled?: boolean; reminder_lead_days?: number; trackers?: Tracker[] }
 export type Fetcher = <T>(method: string, path: string, body?: unknown) => Promise<T>
-export type Partner = { subject: string; display_name: string; linked_at: string }
-export type PartnerStatus = { subject: string; display_name: string; on_period: boolean; next_period?: string; reminder?: string }
+export type ShareField =
+  | 'on_period'
+  | 'next_period'
+  | 'reminders'
+  | 'flow'
+  | 'symptoms'
+  | 'libido'
+  | 'sex'
+  | 'notes'
+export type Partner = { subject: string; display_name: string; linked_at: string; share: ShareField[] }
+export type PartnerStatus = {
+  subject: string
+  display_name: string
+  /** Absent — not merely false — when the owner has not shared it. */
+  on_period?: boolean
+  next_period?: string
+  reminder?: string
+}
+/** One day of a shared cycle; unshared fields are absent, not zero-valued. */
+export type PartnerDay = {
+  date: string
+  on_period: boolean
+  flow?: string
+  symptoms?: string[]
+  sex?: string[]
+  libido?: string[]
+  notes?: string
+  period_started?: boolean
+  period_ended?: boolean
+}
+export type PartnerView = PartnerStatus & { shared: ShareField[]; days: PartnerDay[] }
 export type Invite = { code: string; expires_at: string }
 export type Prediction = { predicted_period_start?: string; method: string; disclaimer: string }
 export type Stats = { period_count: number; checkin_count: number; average_cycle_days: number; symptom_counts: Record<string, number>; cycles_sampled: number }
@@ -51,6 +85,9 @@ export type StatsQuery = { metrics: StatsMetric[]; group_by?: StatsGroupBy; from
 export type StatsResult = { group: string; values: Record<string, unknown> }
 export type StatsQueryResponse = { results: StatsResult[] }
 
+export * from './phase.ts'
+export * from './symptoms.ts'
+
 export function api(fetcher: Fetcher) {
   return {
     dashboard: () => fetcher<Dashboard>('GET', '/api/dashboard'),
@@ -59,6 +96,7 @@ export function api(fetcher: Fetcher) {
     statsQuery: (query: StatsQuery) => fetcher<StatsQueryResponse>('POST', '/api/stats/query', query),
     createPeriod: (input: PeriodInput) => fetcher<void>('POST', '/api/periods', input),
     updatePeriod: (id: number, input: PeriodInput) => fetcher<void>('PATCH', `/api/periods/${id}`, input),
+    deletePeriod: (id: number) => fetcher<void>('DELETE', `/api/periods/${id}`),
     createSymptom: (input: SymptomInput) => fetcher<void>('POST', '/api/symptoms', input),
     updateSymptom: (id: number, input: SymptomInput) => fetcher<void>('PATCH', `/api/symptoms/${id}`, input),
     deleteSymptom: (id: number) => fetcher<void>('DELETE', `/api/symptoms/${id}`),
@@ -70,11 +108,16 @@ export function api(fetcher: Fetcher) {
     login: (input: LoginInput) => fetcher<void>('POST', '/auth/login', input),
     logout: () => fetcher<void>('POST', '/auth/logout'),
     me: () => fetcher<Me>('GET', '/api/me'),
+    preferences: () => fetcher<Preferences>('GET', '/api/preferences'),
+    updatePreferences: (input: PreferencesInput) => fetcher<Preferences>('PATCH', '/api/preferences', input),
     createInvite: () => fetcher<Invite>('POST', '/api/partners/invite'),
     redeemInvite: (code: string) => fetcher<void>('POST', '/api/partners/link', { code }),
     listPartners: () => fetcher<Partner[]>('GET', '/api/partners'),
     revokePartner: (subject: string) => fetcher<void>('DELETE', `/api/partners/${subject}`),
     partnerStatuses: () => fetcher<PartnerStatus[]>('GET', '/api/partners/status'),
+    updateShare: (subject: string, share: ShareField[]) =>
+      fetcher<Partner>('PATCH', `/api/partners/${subject}/share`, { share }),
+    partnerView: (subject: string) => fetcher<PartnerView>('GET', `/api/partners/${subject}/view`),
   }
 }
 

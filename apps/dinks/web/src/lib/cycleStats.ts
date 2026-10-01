@@ -1,4 +1,4 @@
-import type { Dashboard, Period, Symptom } from '@dinks/shared'
+import { isSymptomKind, type Dashboard, type Period, type Symptom } from '@dinks/shared'
 
 /** Plausibility bounds for a cycle gap, matching the backend's domain/period.go EstimateNextPeriod. */
 const MIN_PLAUSIBLE_CYCLE_DAYS = 15
@@ -49,8 +49,14 @@ export function avgPeriodLength(periods: Period[]): number | undefined {
 
 export function symptomBreakdown(symptoms: Symptom[]): { kind: string; count: number; pct: number }[] {
   const counts = new Map<string, number>()
-  for (const s of symptoms) counts.set(s.kind, (counts.get(s.kind) ?? 0) + 1)
-  const total = symptoms.length
+  let total = 0
+  for (const s of symptoms) {
+    // Notes and custom indicator values are check-ins, not symptoms: counting
+    // them made "note" the single biggest row and squeezed out real ones.
+    if (!isSymptomKind(s.kind)) continue
+    counts.set(s.kind, (counts.get(s.kind) ?? 0) + 1)
+    total += 1
+  }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([kind, count]) => ({ kind, count, pct: total > 0 ? Math.round((count / total) * 100) : 0 }))

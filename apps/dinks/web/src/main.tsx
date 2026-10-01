@@ -8,7 +8,9 @@ import CalendarPage from './pages/Calendar'
 import Stats from './pages/Stats'
 import Settings from './pages/Settings'
 import Partners from './pages/Partners'
-import Insights from './pages/Insights'
+import Preferences from './pages/settings/Preferences'
+import PartnerView from './pages/partner/PartnerView'
+import SharedWithMe from './pages/partner/SharedWithMe'
 import { ToastProvider, ToastHost } from './useToast'
 import 'react-day-picker/style.css'
 import './index.css'
@@ -27,7 +29,9 @@ createRoot(document.getElementById('root')!).render(
             <Route path="stats" element={<Stats />} />
             <Route path="settings" element={<Settings />} />
             <Route path="settings/partners" element={<Partners />} />
-            <Route path="settings/insights" element={<Insights />} />
+            <Route path="settings/preferences" element={<Preferences />} />
+            <Route path="partner" element={<SharedWithMe />} />
+            <Route path="partner/:subject" element={<PartnerView />} />
           </Route>
           <Route path="*" element={<Navigate to="/today" replace />} />
         </Routes>

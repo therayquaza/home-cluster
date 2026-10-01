@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Prediction } from '@dinks/shared'
 import { client } from '../api'
 import { useDashboard } from '../useDashboard'
 import { useSelectedDate, todayISO } from '../useSelectedDate'
-import { periodOnDay } from '../lib/periods'
+import { periodOnDay, flowOnDay } from '../lib/periods'
+import { phaseOn, PHASES } from '@dinks/shared'
 import { useMutationToast } from '../useToast'
-import { symptomEmoji, moodEmoji } from '../lib/emoji'
+import { symptomEmoji, moodEmoji, flowEmoji, flowLabel } from '../lib/emoji'
+import FlowPicker from '../components/FlowPicker'
 import LogDay from '../components/LogDay'
 
 const moods = ['Calm', 'Happy', 'Sensitive', 'Irritable', 'Anxious', 'Sad', 'Energetic', 'Tired', 'Confident', 'Stressed', 'Grateful', 'Confused']
 const symptomKinds = ['Cramps', 'Headache', 'Bloating', 'Fatigue', 'Tender breasts']
 
 export default function Today() {
-  const { data, refresh } = useDashboard()
+  const { data, preferences, refresh } = useDashboard()
   const { selectedDate } = useSelectedDate()
-  const [flow, setFlow] = useState('medium')
+  const [flow, setFlow] = useState(preferences.default_flow)
+  // Follow the member's preference for the level a new period starts with. The
+  // preferences load after the first render, so this is what actually seeds it.
+  useEffect(() => { setFlow(preferences.default_flow) }, [preferences.default_flow])
   const [moodSelection, setMoodSelection] = useState<string[]>(['Calm'])
   const [note, setNote] = useState('')
   const [dayEditorOpen, setDayEditorOpen] = useState(false)
@@ -22,12 +26,10 @@ export default function Today() {
   const run = useMutationToast()
   const day = selectedDate
   const todayIso = todayISO()
+  // The phase of the day being shown, not necessarily today — the header can be
+  // pointing at any date the user navigated to.
+  const phase = useMemo(() => phaseOn(day, data?.periods ?? []), [day, data])
   const isToday = day === todayIso
-  const [prediction, setPrediction] = useState<Prediction>()
-
-  useEffect(() => {
-    client.prediction().then(setPrediction).catch(() => undefined)
-  }, [data])
 
   // The globally active (unfinished) period, if any — at most one can exist.
   const active = useMemo(() => data?.periods.find((p) => !p.ended_on), [data])
@@ -37,11 +39,26 @@ export default function Today() {
   const isFuture = day > todayIso
   const todaysSymptoms = useMemo(() => (data?.symptoms ?? []).filter((s) => s.recorded_on === day), [data, day])
   const savedNotes = useMemo(() => todaysSymptoms.filter((s) => s.kind === 'note'), [todaysSymptoms])
+  /** The flow recorded for the selected day, which may differ from the period's summary. */
+  const dayFlow = periodForDay ? flowOnDay(periodForDay, day) : flow
+
+  async function setDayFlow(next: string) {
+    if (!periodForDay) return
+    const days = (periodForDay.days ?? []).filter((d) => d.date !== day && d.flow !== periodForDay.flow)
+    if (next !== periodForDay.flow) days.push({ date: day, flow: next })
+    days.sort((a, b) => a.date.localeCompare(b.date))
+    await run(
+      () => client.updatePeriod(periodForDay.id, { started_on: periodForDay.started_on, ended_on: periodForDay.ended_on, flow: periodForDay.flow, days, notes: periodForDay.notes }),
+      `Flow set to ${flowLabel(next)}`,
+    ).catch(() => undefined)
+    refresh()
+  }
 
   async function endPeriod() {
     if (!active) return
+    // days is carried over: ending a period must not discard the per-day flow.
     await run(
-      () => client.updatePeriod(active.id, { started_on: active.started_on, ended_on: day, flow: active.flow, notes: active.notes }),
+      () => client.updatePeriod(active.id, { started_on: active.started_on, ended_on: day, flow: active.flow, days: active.days ?? [], notes: active.notes }),
       'Period ended',
     ).catch(() => undefined)
     refresh()
@@ -49,7 +66,7 @@ export default function Today() {
 
   async function startPeriod() {
     if (isFuture) return
-    await run(() => client.createPeriod({ started_on: day, flow, notes: '' }), 'Period started').catch(() => undefined)
+    await run(() => client.createPeriod({ started_on: day, flow, days: [], notes: '' }), 'Period started').catch(() => undefined)
     refresh()
   }
 
@@ -93,10 +110,35 @@ export default function Today() {
         <p className="text-sm text-slate-600">
           {periodForDay
             ? `Started ${periodForDay.started_on}${periodForDay.ended_on ? `, ended ${periodForDay.ended_on}` : ''}.`
-            : prediction?.predicted_period_start
-              ? `Predicted next period: ${prediction.predicted_period_start}.`
+            : data?.next_period
+              ? `Predicted next period: ${data.next_period}.`
               : 'Log two periods to receive an estimate.'}
         </p>
+
+        {/* Which part of the cycle this day falls in. Hidden entirely when it
+            cannot be derived, rather than guessing from a default length. */}
+        {phase.phase !== 'unknown' && (
+          <p className="mt-1 text-sm text-slate-600">
+            {PHASES.find((p) => p.key === phase.phase)?.label} · day {phase.cycleDay} of {phase.cycleLength}
+          </p>
+        )}
+
+        {/* The flow for the selected day, always visible when there is one — flow
+            is the main thing you check when you open the app on a period day. */}
+        {periodForDay && (
+          <div className="mt-4 rounded-2xl bg-white/70 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-brand-700">Flow on {isToday ? 'today' : day}</span>
+              <span className="text-sm font-bold text-brand-700">
+                {flowEmoji(dayFlow)} {flowLabel(dayFlow)}
+              </span>
+            </div>
+            <FlowPicker value={dayFlow} onChange={(next) => void setDayFlow(next)} size="sm" />
+            {periodForDay.days && periodForDay.days.length > 1 && (
+              <p className="mt-2 text-xs text-brand-700">This period changes day to day — pick a level to set it for {isToday ? 'today' : day}.</p>
+            )}
+          </div>
+        )}
 
         {isFuture ? (
           <p className="mt-4 text-xs text-brand-700">Can't log a period for a future day.</p>
@@ -114,11 +156,10 @@ export default function Today() {
 
             {!periodForDay && !active && (
               <>
-                <select className="mt-3 w-full rounded-xl border border-brand-200 bg-white px-3 py-2 text-sm" value={flow} onChange={(e) => setFlow(e.target.value)}>
-                  <option value="light">Light</option>
-                  <option value="medium">Medium</option>
-                  <option value="heavy">Heavy</option>
-                </select>
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-700">Flow</label>
+                  <FlowPicker value={flow} onChange={setFlow} />
+                </div>
                 <button className="mt-4 w-full rounded-xl bg-brand-500 py-3 font-semibold text-white shadow-sm" onClick={startPeriod}>
                   Log period
                 </button>
@@ -209,7 +250,7 @@ export default function Today() {
         )}
       </section>
 
-      <p className="px-1 text-center text-xs text-slate-400">{prediction?.disclaimer ?? 'Estimates are not medical advice.'}</p>
+      <p className="px-1 text-center text-xs text-slate-400">Estimates are not medical advice.</p>
 
       <button
         className="fixed bottom-24 right-5 z-20 grid h-14 w-14 place-items-center rounded-full bg-brand-500 text-3xl font-light text-white shadow-lg"
@@ -224,6 +265,8 @@ export default function Today() {
           date={day}
           period={periodForDay}
           symptoms={todaysSymptoms}
+          trackers={preferences.trackers}
+          defaultFlow={preferences.default_flow}
           onClose={() => setDayEditorOpen(false)}
           onSaved={refresh}
         />

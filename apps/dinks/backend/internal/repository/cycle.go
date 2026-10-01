@@ -135,6 +135,14 @@ func (r *Cycle) CreateMemberWithPassword(ctx context.Context, subject, email, di
 	return err
 }
 
+// UpdatePreferences replaces the member's settings bag. A full replace is fine
+// and simpler than a per-field update: the document is small, and a PATCH that
+// only ever sends changed fields would have to read-modify-write it anyway.
+func (r *Cycle) UpdatePreferences(ctx context.Context, subject string, p model.Preferences) error {
+	_, err := r.members.UpdateByID(ctx, subject, bson.M{"$set": bson.M{"preferences": p}})
+	return err
+}
+
 func (r *Cycle) GetMember(ctx context.Context, subject string) (*model.Member, error) {
 	var m model.Member
 	err := r.members.FindOne(ctx, bson.M{"_id": subject}).Decode(&m)
@@ -145,6 +153,131 @@ func (r *Cycle) GetMember(ctx context.Context, subject string) (*model.Member, e
 		return nil, err
 	}
 	return &m, nil
+}
+
+// MembersBySubject looks up several members at once, returning a subject ->
+// member map. The partner listings call this instead of GetMember per row: with
+// one query per partner the endpoint cost grew linearly with the number of links.
+func (r *Cycle) MembersBySubject(ctx context.Context, subjects []string) (map[string]model.Member, error) {
+	out := make(map[string]model.Member, len(subjects))
+	if len(subjects) == 0 {
+		return out, nil
+	}
+	// De-duplicate: a subject can appear twice when a pair is linked both ways.
+	unique := make([]string, 0, len(subjects))
+	seen := make(map[string]bool, len(subjects))
+	for _, s := range subjects {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		unique = append(unique, s)
+	}
+	cur, err := r.members.Find(ctx, bson.M{"_id": bson.M{"$in": unique}})
+	if err != nil {
+		return nil, err
+	}
+	var members []model.Member
+	if err := cur.All(ctx, &members); err != nil {
+		return nil, err
+	}
+	for _, m := range members {
+		out[m.Subject] = m
+	}
+	return out, nil
+}
+
+// StatusPeriods returns just the period fields a partner's status view needs, for
+// one owner. The partner status endpoint used to load every period of every
+// shared owner; EstimateNextPeriod only ever looks at the six most recent starts,
+// so this reads a projection capped well below the member's whole history. The
+// cap is the same guarantee EstimateNextPeriod gives either way — a shorter
+// history than the cap would produce the same estimate.
+func (r *Cycle) StatusPeriods(ctx context.Context, subject string) ([]model.Period, error) {
+	cur, err := r.periods.Find(ctx, bson.M{"subject": subject},
+		options.Find().
+			SetProjection(bson.M{"started_on": 1, "ended_on": 1, "flow": 1}).
+			SetSort(bson.D{{Key: "started_on", Value: -1}}).
+			SetLimit(partnerStatusPeriodReads))
+	if err != nil {
+		return nil, err
+	}
+	var docs []model.Period
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+// partnerStatusPeriodReads is comfortably above the six plausible cycles
+// EstimateNextPeriod averages, so a member with implausible gaps (which the
+// estimator skips) still gets an estimate from a full six.
+const partnerStatusPeriodReads = 24
+
+// SharedPeriods returns full period records for a partner view, unlike
+// StatusPeriods which projects away the notes and per-day flow a partner has no
+// right to see unless the owner shared them.
+func (r *Cycle) SharedPeriods(ctx context.Context, subject string, limit int) ([]model.Period, error) {
+	cur, err := r.periods.Find(ctx, bson.M{"subject": subject},
+		options.Find().
+			SetSort(bson.D{{Key: "started_on", Value: -1}}).
+			SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	var docs []model.Period
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+// SharedSymptoms returns check-ins on or after `from` for a partner view, most
+// recent first. Symptoms carry free-form notes, so the caller must strip what
+// the owner has not shared rather than projecting the field away here — the
+// query has to be able to serve owners who did share notes.
+func (r *Cycle) SharedSymptoms(ctx context.Context, subject string, from time.Time) ([]model.Symptom, error) {
+	cur, err := r.symptoms.Find(ctx, bson.M{"subject": subject, "recorded_on": bson.M{"$gte": from}},
+		options.Find().
+			SetSort(bson.D{{Key: "recorded_on", Value: -1}}).
+			SetLimit(int64(maxSharedDayReads*8)))
+	if err != nil {
+		return nil, err
+	}
+	var docs []model.Symptom
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+// maxSharedDayReads bounds how much history one partner view may return.
+const maxSharedDayReads = 30
+
+// LinkBetween returns the single link connecting these two subjects, or
+// ErrNotFound. It is the authorisation check for every partner read: no link
+// means no view, regardless of what the caller asks for.
+func (r *Cycle) LinkBetween(ctx context.Context, owner, partner string) (model.PartnerLink, error) {
+	var link model.PartnerLink
+	err := r.partnerLinks.FindOne(ctx,
+		bson.M{"owner_subject": owner, "partner_subject": partner}).Decode(&link)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return model.PartnerLink{}, ErrNotFound
+	}
+	if err != nil {
+		return model.PartnerLink{}, err
+	}
+	return link, nil
+}
+
+// UpdateShare replaces the set of fields one partner may see. The share is
+// matched on the owner+partner pair rather than on the id the client would have
+// to fetch first.
+func (r *Cycle) UpdateShare(ctx context.Context, owner, partner string, share []model.ShareField) error {
+	_, err := r.partnerLinks.UpdateOne(ctx,
+		bson.M{"owner_subject": owner, "partner_subject": partner},
+		bson.M{"$set": bson.M{"share": share}})
+	return err
 }
 
 func (r *Cycle) Periods(ctx context.Context, subject string) ([]model.Period, error) {
@@ -374,6 +507,19 @@ func (r *Cycle) UpdateSymptom(ctx context.Context, subject string, id int64, s m
 
 func (r *Cycle) DeleteSymptom(ctx context.Context, subject string, id int64) error {
 	result, err := r.symptoms.DeleteOne(ctx, bson.M{"_id": id, "subject": subject})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeletePeriod removes a period outright. Scoped to the subject so one member can
+// never delete another's record by guessing an id.
+func (r *Cycle) DeletePeriod(ctx context.Context, subject string, id int64) error {
+	result, err := r.periods.DeleteOne(ctx, bson.M{"_id": id, "subject": subject})
 	if err != nil {
 		return err
 	}

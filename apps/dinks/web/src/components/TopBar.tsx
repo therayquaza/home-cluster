@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useDashboard } from '../useDashboard'
 import { useSelectedDate, todayISO } from '../useSelectedDate'
-import { toISO } from '../lib/dates'
-import { periodOnDay } from '../lib/periods'
+import { toISO, toDate } from '../lib/dates'
+import { periodOnDay, flowOnDay } from '../lib/periods'
+import { flowEmoji } from '../lib/emoji'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const WEEKDAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -47,6 +48,14 @@ export default function TopBar() {
           <p className="text-sm font-bold text-slate-800">
             {WEEKDAYS_FULL[selected.getDay()]}, {MONTHS[selected.getMonth()]} {selected.getDate()}
           </p>
+          {/* Spelling out whether the shown day is today: the strip highlight alone
+              was ambiguous, and this is what the rest of the app keys off.
+              ISO dates compare correctly as plain strings, so this stays a
+              string compare — comparing two Dates built from the same day was
+              always false and never said "past". */}
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+            {selectedDate === todayIso ? 'Today' : selectedDate < todayIso ? 'Past day' : 'Future day'}
+          </p>
         </div>
         <button
           className="grid h-9 w-9 place-items-center rounded-full bg-white text-brand-500 shadow-sm"
@@ -79,7 +88,8 @@ export default function TopBar() {
             const closed = !!period && !!period.ended_on
             const predicted = day.iso === data?.next_period
             const symptom = data?.symptoms.some((s) => s.recorded_on === day.iso)
-            const filled = isSelected || period
+            const onPeriod = ongoing || closed
+            const flow = period ? flowOnDay(period, day.iso) : undefined
             return (
               <button
                 key={day.iso}
@@ -87,30 +97,45 @@ export default function TopBar() {
                   setSelectedDate(day.iso)
                   if (location.pathname !== '/today') navigate('/today')
                 }}
+                aria-label={`${WEEKDAYS_FULL[toDate(day.iso).getDay()]} ${day.dayNum}${isToday ? ', today' : ''}${isSelected ? ', selected' : ''}${onPeriod ? ', period day' : ''}`}
+                aria-current={isToday ? 'date' : undefined}
                 className={`relative flex flex-1 flex-col items-center gap-1 rounded-2xl py-2 text-xs font-medium transition ${
                   isSelected
                     ? 'bg-brand-500 text-white'
                     : ongoing
                       ? 'bg-brand-500 text-white'
                       : closed
-                        ? 'bg-brand-300 text-white'
+                        ? 'bg-brand-100 text-brand-700'
                         : predicted
                           ? 'border-2 border-dashed border-brand-500 text-brand-700'
                           : 'text-slate-500'
                 }`}
               >
                 <span className="uppercase tracking-wide">{day.weekday}</span>
-                <span
-                  className={`grid h-6 w-6 place-items-center rounded-full text-sm font-bold ${
-                    isToday ? (filled ? 'ring-2 ring-white' : 'ring-2 ring-brand-500') : ''
-                  }`}
-                >
-                  {day.dayNum}
+                <span className="flex items-center gap-0.5">
+                  {/* Today keeps its own marker whether or not it is selected. Previously
+                      "today" was a white ring that vanished on the selected pink pill and
+                      was near-invisible against the brand background, so opening the app
+                      on the default date gave no sign which day you were looking at. */}
+                  <span
+                    className={`grid h-6 w-6 place-items-center rounded-full text-sm font-bold ${
+                      isToday
+                        ? isSelected
+                          ? 'bg-white text-brand-700'
+                          : onPeriod
+                            ? 'ring-2 ring-white'
+                            : 'bg-brand-500 text-white'
+                        : ''
+                    }`}
+                  >
+                    {day.dayNum}
+                  </span>
+                  {onPeriod && <span aria-hidden="true" className="text-[10px] leading-none">{flowEmoji(flow ?? 'unknown')}</span>}
                 </span>
                 {predicted && !period && <span className="sr-only">Predicted period day</span>}
                 {ongoing && <span className="sr-only">Period day, still ongoing</span>}
                 {closed && <span className="sr-only">Period day, ended</span>}
-                {symptom && <span className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-brand-700" aria-label="Symptom logged" />}
+                {symptom && <span className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-brand-700" aria-hidden="true" />}
               </button>
             )
           })}

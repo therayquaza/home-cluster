@@ -93,6 +93,8 @@ func routes(h *handlers.Handler, auth *middleware.Auth, sessions *scs.SessionMan
 	// Authenticated.
 	guard := auth.Handler
 	mux.Handle("GET /api/me", guard(http.HandlerFunc(h.Me)))
+	mux.Handle("GET /api/preferences", guard(http.HandlerFunc(h.GetPreferences)))
+	mux.Handle("PATCH /api/preferences", guard(http.HandlerFunc(h.UpdatePreferences)))
 	mux.Handle("DELETE /api/me", guard(http.HandlerFunc(h.DeleteMe)))
 	mux.Handle("GET /api/dashboard", guard(http.HandlerFunc(h.Dashboard)))
 	mux.Handle("GET /api/prediction", guard(http.HandlerFunc(h.Prediction)))
@@ -102,6 +104,7 @@ func routes(h *handlers.Handler, auth *middleware.Auth, sessions *scs.SessionMan
 	mux.Handle("POST /api/stats/query", guard(http.HandlerFunc(h.StatsQuery)))
 	mux.Handle("POST /api/periods", guard(http.HandlerFunc(h.CreatePeriod)))
 	mux.Handle("PATCH /api/periods/{id}", guard(http.HandlerFunc(h.UpdatePeriod)))
+	mux.Handle("DELETE /api/periods/{id}", guard(http.HandlerFunc(h.DeletePeriod)))
 	mux.Handle("POST /api/symptoms", guard(http.HandlerFunc(h.CreateSymptom)))
 	mux.Handle("PATCH /api/symptoms/{id}", guard(http.HandlerFunc(h.UpdateSymptom)))
 	mux.Handle("DELETE /api/symptoms/{id}", guard(http.HandlerFunc(h.DeleteSymptom)))
@@ -110,6 +113,10 @@ func routes(h *handlers.Handler, auth *middleware.Auth, sessions *scs.SessionMan
 	mux.Handle("GET /api/partners", guard(http.HandlerFunc(h.ListPartners)))
 	mux.Handle("DELETE /api/partners/{subject}", guard(http.HandlerFunc(h.RevokePartner)))
 	mux.Handle("GET /api/partners/status", guard(http.HandlerFunc(h.PartnerStatuses)))
+	mux.Handle("PATCH /api/partners/{subject}/share", guard(http.HandlerFunc(h.UpdateShare)))
+	// The partner read. Scoped to a single owner, and every field it returns is
+	// filtered by that owner's share — see handlers.projectDays.
+	mux.Handle("GET /api/partners/{subject}/view", guard(http.HandlerFunc(h.PartnerView)))
 
 	return sessions.LoadAndSave(httpx.RecoverPanic(logging.RequestLog(logging.Headers(mux))))
 }

@@ -1,1 +1,1 @@
-{"compilerOptions":{"strict":true,"jsx":"react-jsx","target":"ES2022","moduleResolution":"bundler","noEmit":true,"skipLibCheck":true},"include":["**/*.ts","**/*.tsx"]}
+{"compilerOptions": {"strict": true, "jsx": "react-jsx", "target": "ES2022", "moduleResolution": "bundler", "noEmit": true, "skipLibCheck": true, "allowImportingTsExtensions": true}, "include": ["**/*.ts", "**/*.tsx"]}

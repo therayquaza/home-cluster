@@ -9,6 +9,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -106,7 +108,10 @@ func random() string {
 
 // cycleStatus derives on-period/next-period/reminder from a subject's periods —
 // shared by the owner's own dashboard and the status-only view a partner sees.
-func cycleStatus(ps []model.Period) (onPeriod bool, nextPeriod *string, reminder string) {
+// reminderOn and leadDays come from the owner's preferences, so one member can
+// silence the reminder or change its lead time without affecting anyone else.
+func cycleStatus(ps []model.Period, prefs model.Preferences) (onPeriod bool, nextPeriod *string, reminder string) {
+	reminderOn, leadDays := prefs.ReminderOn(), prefs.LeadDays()
 	for _, p := range ps {
 		if p.EndedOn == nil {
 			onPeriod = true
@@ -120,7 +125,7 @@ func cycleStatus(ps []model.Period) (onPeriod bool, nextPeriod *string, reminder
 	if next := domain.EstimateNextPeriod(domainPeriods); next != nil && next.After(time.Now()) {
 		v := next.Format(dateLayout)
 		nextPeriod = &v
-		if time.Until(*next) < 7*24*time.Hour {
+		if reminderOn && time.Until(*next) < time.Duration(leadDays)*24*time.Hour {
 			reminder = "Your next period may be approaching. This is a non-medical estimate."
 		}
 	}
@@ -142,9 +147,57 @@ func periodModel(subject string, in dto.PeriodInput) (model.Period, error) {
 		end = &v
 	}
 	if in.Flow == "" {
-		in.Flow = "unknown"
+		in.Flow = model.FlowUnknown
 	}
-	return model.Period{Subject: subject, StartedOn: start, EndedOn: end, Flow: in.Flow, Notes: strings.TrimSpace(in.Notes)}, nil
+	if !validFlowLevels[in.Flow] {
+		return model.Period{}, fmt.Errorf("flow must be one of %s", strings.Join(model.FlowLevels, ", "))
+	}
+	days, err := flowDayModels(start, end, in.Days)
+	if err != nil {
+		return model.Period{}, err
+	}
+	return model.Period{Subject: subject, StartedOn: start, EndedOn: end, Flow: in.Flow, Days: days, Notes: strings.TrimSpace(in.Notes)}, nil
+}
+
+// flowDayModels converts the per-day flow entries, rejecting a day outside the
+// period it belongs to. An open-ended period accepts any day from its start
+// onwards, since it has no upper bound yet.
+func flowDayModels(start time.Time, end *time.Time, in []dto.FlowDay) ([]model.FlowDay, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make([]model.FlowDay, 0, len(in))
+	seen := make(map[string]bool, len(in))
+	for _, d := range in {
+		day, err := time.Parse(dateLayout, d.Date)
+		if err != nil {
+			return nil, fmt.Errorf("days: date %q must be YYYY-MM-DD", d.Date)
+		}
+		if day.Before(start) || (end != nil && day.After(*end)) {
+			return nil, fmt.Errorf("days: %s is outside the period %s..%s", d.Date, start.Format(dateLayout), endOf(end))
+		}
+		if seen[d.Date] {
+			return nil, fmt.Errorf("days: %s appears twice", d.Date)
+		}
+		seen[d.Date] = true
+		flow := d.Flow
+		if flow == "" {
+			flow = model.FlowUnknown
+		}
+		if !validFlowLevels[flow] {
+			return nil, fmt.Errorf("days: %s has flow %q, want one of %s", d.Date, d.Flow, strings.Join(model.FlowLevels, ", "))
+		}
+		out = append(out, model.FlowDay{Date: day, Flow: flow})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date.Before(out[j].Date) })
+	return out, nil
+}
+
+func endOf(end *time.Time) string {
+	if end == nil {
+		return "ongoing"
+	}
+	return end.Format(dateLayout)
 }
 
 func periodDTO(p model.Period) dto.Period {
@@ -152,6 +205,9 @@ func periodDTO(p model.Period) dto.Period {
 	if p.EndedOn != nil {
 		v := p.EndedOn.Format(dateLayout)
 		out.EndedOn = &v
+	}
+	for _, d := range p.Days {
+		out.Days = append(out.Days, dto.FlowDay{Date: d.Date.Format(dateLayout), Flow: d.Flow})
 	}
 	return out
 }
