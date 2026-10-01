@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { Dashboard } from '@dinks/shared'
 import { flowEmoji, flowOnDay, periodOnDay, predictCycle, toDate, toISO, todayISO } from '@dinks/shared'
 import { COLORS } from '../lib/theme'
@@ -25,15 +25,37 @@ export default function TopBar({ data, displayName, selectedDate, onSelect, onOp
   const [windowOffset, setWindowOffset] = useState(0)
   const initial = displayName ? displayName.trim().charAt(0).toUpperCase() : '?'
 
+  // Centre the strip on the selected day so picking a date elsewhere (calendar,
+  // arrows, swipe) always scrolls that day into view; arrows and swipe add a
+  // further ±3 days from there.
   const strip = useMemo(() => {
-    const base = new Date()
+    const base = toDate(selectedDate)
     const days: { iso: string; weekday: string; dayNum: number }[] = []
     for (let offset = -3; offset <= 3; offset++) {
       const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + windowOffset + offset)
       days.push({ iso: toISO(d), weekday: WEEKDAYS[d.getDay()], dayNum: d.getDate() })
     }
     return days
-  }, [windowOffset])
+  }, [selectedDate, windowOffset])
+
+  // Re-centre whenever the selection changes so the chosen day stays visible.
+  useEffect(() => {
+    setWindowOffset(0)
+  }, [selectedDate])
+
+  // Swipe the strip left/right to page by three days. The gesture is only
+  // claimed once it is clearly horizontal, so taps on the day cells still work.
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy),
+        onPanResponderRelease: (_, g) => {
+          if (g.dx <= -30) setWindowOffset((o) => o + 3)
+          else if (g.dx >= 30) setWindowOffset((o) => o - 3)
+        },
+      }),
+    [],
+  )
 
   const selected = useMemo(() => toDate(selectedDate), [selectedDate])
 
@@ -64,7 +86,7 @@ export default function TopBar({ data, displayName, selectedDate, onSelect, onOp
         <Pressable style={styles.arrow} onPress={() => setWindowOffset((o) => o - 3)} accessibilityLabel="Show earlier days">
           <Text style={styles.arrowText}>‹</Text>
         </Pressable>
-        <View style={styles.strip}>
+        <View style={styles.strip} {...pan.panHandlers}>
           {strip.map((day) => {
             const isSelected = day.iso === selectedDate
             const isToday = day.iso === todayIso
@@ -78,8 +100,9 @@ export default function TopBar({ data, displayName, selectedDate, onSelect, onOp
             const onPeriod = ongoing || closed
             const flow = period ? flowOnDay(period, day.iso) : undefined
 
-            const cellStyle =
-              isSelected || ongoing
+            const cellStyle = isSelected
+              ? styles.cellSelected
+              : ongoing
                 ? styles.cellOn
                 : closed
                   ? styles.cellClosed
@@ -136,6 +159,7 @@ const styles = StyleSheet.create({
   arrowText: { fontSize: 18, color: '#cbd5e1' },
   strip: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
   day: { flex: 1, alignItems: 'center', gap: 4, borderRadius: 16, paddingVertical: 8, marginHorizontal: 1 },
+  cellSelected: { backgroundColor: COLORS.brand700 },
   cellOn: { backgroundColor: COLORS.brand500 },
   cellClosed: { backgroundColor: COLORS.brand100 },
   cellPredicted: { borderWidth: 2, borderColor: COLORS.brand500, borderStyle: 'dashed' },

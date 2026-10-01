@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Dashboard } from '@dinks/shared'
 import { todayISO } from '@dinks/shared'
 import { client, setUnauthorizedHandler } from './api'
@@ -20,6 +21,15 @@ type AuthState = 'loading' | 'authed' | 'anon'
 // TopBar on Today/Calendar/Stats, and the same bottom navigation. The one mobile
 // difference is that navigation is tab state rather than a URL router.
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppShell />
+    </SafeAreaProvider>
+  )
+}
+
+function AppShell() {
+  const insets = useSafeAreaInsets()
   const [auth, setAuth] = useState<AuthState>('loading')
   const [displayName, setDisplayName] = useState('')
   const [data, setData] = useState<Dashboard>()
@@ -61,9 +71,9 @@ export default function App() {
 
   if (auth === 'loading') {
     return (
-      <SafeAreaView style={styles.loading}>
+      <View style={[styles.loading, { paddingTop: insets.top }]}>
         <Text style={styles.loadingText}>Loading…</Text>
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -72,7 +82,7 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.app}>
+    <View style={[styles.app, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       {tab !== 'Settings' && (
         <TopBar
           data={data}
@@ -89,14 +99,14 @@ export default function App() {
         {tab === 'Stats' && <Stats client={client} data={data} />}
         {tab === 'Settings' && <Settings client={client} displayName={displayName} onSignedOut={handleSignOut} />}
       </View>
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         {TABS.map((t) => (
           <Pressable key={t} style={styles.tabItem} onPress={() => setTab(t)} accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
             <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>{t}</Text>
           </Pressable>
         ))}
       </View>
-    </SafeAreaView>
+    </View>
   )
 }
 
