@@ -184,7 +184,11 @@ spec:
         template:
           spec:
             restartPolicy: Never
-            serviceAccountName: dinks-gha-rs-no-permission
+            # serviceAccountName is deliberately left unset so the chart
+            # creates the dinks-gha-rs-no-permission ServiceAccount itself.
+            # Setting it here suppresses the chart's own ServiceAccount
+            # template, and the runner pods then fail to start because the
+            # ServiceAccount never exists.
             initContainers:
               - name: init-dind-externals
                 image: ghcr.io/actions/actions-runner:2.337.0
