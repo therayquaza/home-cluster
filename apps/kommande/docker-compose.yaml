@@ -13,7 +13,7 @@ services:
         condition: service_healthy
 
   mongo:
-    image: mongo:8.2.7-rc0-noble
+    image: mongo:8.2.7-rc0-noble@sha256:526fbbf6433f46bc2827048cfce80f3c51925c519b493abd6e97d0ef98a3586e
     volumes:
       - mongo-data:/data/db
     healthcheck:
