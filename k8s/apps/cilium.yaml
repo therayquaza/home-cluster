@@ -79,10 +79,10 @@ spec:
             # (kernel ip-masq-agent / iptables SNAT handles pod->internet.)
             hostRouting: false
 
-          # Scope the datapath devices explicitly: only the physical uplink
-          # (no interface churn from the tunnel devices being treated as
-          # datapath interfaces).
-          devices: "eno1"
+          # Scope the datapath devices explicitly. WireGuard traffic must also
+          # traverse Cilium's datapath so the private gateway VIP (10.20.0.1)
+          # can serve HTTPS to VPN clients.
+          devices: "eno1,wg0"
 
           # -------------------------------------------------------------------
           # Host firewall — DISABLED.
