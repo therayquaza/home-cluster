@@ -82,7 +82,7 @@ resource "keycloak_openid_client" "dinks_mobile" {
   standard_flow_enabled        = true
   direct_access_grants_enabled = false
   pkce_code_challenge_method   = "S256"
-  valid_redirect_uris = ["dinks://*"]
+  valid_redirect_uris          = ["dinks://*"]
 }
 
 # ==========================================
